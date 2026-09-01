@@ -132,6 +132,7 @@ const AddQrModal = ({
             initialData={initialData ?? null}
             onSuccess={closeDialog}
             readOnly={isReadOnlyView}
+            onEdit={isReadOnlyView ? () => setIsEditing(true) : undefined}
           />
           <DialogFooter className="sm:justify-end dialog-footer gap-2">
             <DialogClose asChild onClick={closeDialog}>

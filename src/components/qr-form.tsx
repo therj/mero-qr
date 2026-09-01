@@ -39,6 +39,7 @@ interface QrFormProps {
   initialData?: TQr | null;
   submitLabel?: string;
   readOnly?: boolean;
+  onEdit?: () => void;
 }
 
 function getDefaultValues(type: QRCodeTypeEnum | null): Partial<QrFormValues> {
@@ -114,6 +115,7 @@ export function QrForm({
   initialData,
   submitLabel,
   readOnly = false,
+  onEdit,
 }: QrFormProps) {
   const schema = type ? getQrSchema(type) : null;
 
@@ -176,8 +178,19 @@ export function QrForm({
     );
     return (
       <div className="space-y-2 max-h-[45vh] overflow-y-auto pr-1">
-        <p className="text-xs text-muted-foreground bg-muted px-2 py-1 rounded">
-          Read-only view. Use the card&apos;s edit button to modify.
+        <p className="text-xs text-muted-foreground bg-muted px-2 py-1 rounded flex items-center justify-between gap-2">
+          <span>
+            Read-only view. Use the card&apos;s edit button to modify.
+          </span>
+          {onEdit && (
+            <button
+              type="button"
+              onClick={onEdit}
+              className="underline text-primary hover:text-primary/80 shrink-0 font-medium"
+            >
+              Edit
+            </button>
+          )}
         </p>
         <div className="divide-y rounded-md border p-3">
           {displayRow(`Title`, values.title as string)}
