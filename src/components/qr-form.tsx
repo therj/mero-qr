@@ -27,6 +27,7 @@ import {
 } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
+import { TagInput } from '@/components/ui/tag-input';
 import {
   Select,
   SelectContent,
@@ -369,20 +370,11 @@ export function QrForm({
             <FormItem>
               <FormLabel>Tags (optional)</FormLabel>
               <FormControl>
-                <Input
-                  placeholder="home, work, personal (comma separated)"
+                <TagInput
+                  value={(field.value as unknown as string[]) ?? []}
+                  onChange={field.onChange}
+                  placeholder="home, work, personal (comma or Enter)"
                   disabled={readOnly}
-                  value={(field.value as unknown as string[])?.join(`, `) ?? ``}
-                  onChange={(e) => {
-                    const arr = e.target.value
-                      .split(`,`)
-                      .map((t) => t.trim())
-                      .filter(Boolean);
-                    field.onChange(arr);
-                  }}
-                  onBlur={field.onBlur}
-                  name={field.name}
-                  ref={field.ref}
                 />
               </FormControl>
               <FormMessage />
