@@ -3,13 +3,19 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
-import { ArrowPathIcon, HomeIcon, PlayIcon } from '@heroicons/react/24/outline';
+import {
+  ArrowPathIcon,
+  HomeIcon,
+  PlayIcon,
+  ArrowUpTrayIcon,
+} from '@heroicons/react/24/outline';
 import { db } from '@/db';
 import { PlusIcon } from '@radix-ui/react-icons';
 import { useEffect, useState } from 'react';
 import { Button } from './ui/button';
 import { ThemeToggle } from './theme-provider';
 import AddQrModal from './add-qr-modal';
+import { ImportQrDialog } from './import-qr-dialog';
 
 const deleteAllItems = () => {
   db.qrs.clear();
@@ -21,6 +27,7 @@ function NavBar({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
   const baseClasses = `border-b-2 py-2 px-4 sm:px-8 lg:px-4`;
 
   const [isOpen, setIsOpen] = useState(false);
+  const [isImportOpen, setIsImportOpen] = useState(false);
 
   const toggleDialog = (setOpen: boolean) => {
     setIsOpen(setOpen);
@@ -99,6 +106,23 @@ function NavBar({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
               </Button>
             </Button>
           )}
+          {isDesign && (
+            <Button
+              size={`lg`}
+              variant={`outline`}
+              className="text-base p-2 hover:cursor-pointer"
+              asChild
+            >
+              <Button
+                variant={`link`}
+                className="flex flex-row items-center gap-2 text-primary hover:bg-primary hover:bg-opacity-10"
+                onClick={() => setIsImportOpen(true)}
+                title="Import QR as JSON"
+              >
+                <ArrowUpTrayIcon className="w-6 h-6 px-px py-px" />
+              </Button>
+            </Button>
+          )}
           <Button
             size={`lg`}
             variant={`outline`}
@@ -132,6 +156,7 @@ function NavBar({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
         </div>
       </div>
       <AddQrModal onToggleDialog={toggleDialog} isOpen={isOpen} />
+      <ImportQrDialog isOpen={isImportOpen} onToggle={setIsImportOpen} />
     </nav>
   );
 }

@@ -55,6 +55,7 @@ import {
 } from '@/types/qr';
 import { QRCodeTypeEnum } from '@/constants/enums';
 import { db } from '@/db';
+import { getShareText, getShareUrl } from '@/helpers/qr/shareText';
 
 const getQrData = (type: QRCodeTypeEnum, data: TQr[`data`]) => {
   let Icon: React.ElementType;
@@ -168,6 +169,8 @@ export function QRCard({
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
   const [isShareOpen, setIsShareOpen] = useState(false);
   const [shareCopied, setShareCopied] = useState(false);
+  const [shareImageCopied, setShareImageCopied] = useState(false);
+  const [shareJsonCopied, setShareJsonCopied] = useState(false);
 
   const handleMouseEnter = () => {
     setIsHovered(true);
@@ -266,9 +269,11 @@ export function QRCard({
     setIsShareOpen(true);
   };
 
+  const shareText = getShareText(qr);
+
   const handleShareCopy = async () => {
     try {
-      await navigator.clipboard.writeText(dataTitleText);
+      await navigator.clipboard.writeText(shareText);
       setShareCopied(true);
       setTimeout(() => setShareCopied(false), 2000);
     } catch (err) {
@@ -276,23 +281,70 @@ export function QRCard({
     }
   };
 
+  const handleShareCopyImage = async () => {
+    try {
+      const res = await fetch(`/qr.png`);
+      const blob = await res.blob();
+      if (
+        navigator.clipboard &&
+        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+        (window as unknown as { ClipboardItem?: unknown }).ClipboardItem
+      ) {
+        const ClipboardItemCtor = (
+          window as unknown as { ClipboardItem: typeof ClipboardItem }
+        ).ClipboardItem;
+        const item = new ClipboardItemCtor({
+          [blob.type || `image/png`]: blob,
+        });
+        await navigator.clipboard.write([item]);
+      } else {
+        await navigator.clipboard.writeText(shareText);
+      }
+      setShareImageCopied(true);
+      setTimeout(() => setShareImageCopied(false), 2000);
+    } catch (err) {
+      console.error(`Failed to copy image`, err);
+      try {
+        await navigator.clipboard.writeText(shareText);
+        setShareImageCopied(true);
+        setTimeout(() => setShareImageCopied(false), 2000);
+        // eslint-disable-next-line no-empty
+      } catch {}
+    }
+  };
+
+  const handleCopyJson = async () => {
+    try {
+      await navigator.clipboard.writeText(JSON.stringify(qr, null, 2));
+      setShareJsonCopied(true);
+      setTimeout(() => setShareJsonCopied(false), 2000);
+    } catch (err) {
+      console.error(`Failed to copy JSON`, err);
+    }
+  };
+
   const handleShareEmail = () => {
-    const shareUrl = encodeURIComponent(dataTitleText);
+    const body = encodeURIComponent(shareText);
     const subject = encodeURIComponent(cardTitleText);
-    window.open(`mailto:?subject=${subject}&body=${shareUrl}`, `_blank`);
+    const mailto = `mailto:?subject=${subject}&body=${body}`;
+    window.location.href = mailto;
   };
 
   const handleShareX = () => {
-    const text = encodeURIComponent(`${cardTitleText}: ${dataTitleText}`);
-    window.open(`https://twitter.com/intent/tweet?text=${text}`, `_blank`);
+    const text = encodeURIComponent(shareText);
+    const url = `https://twitter.com/intent/tweet?text=${text}`;
+    const win = window.open(url, `_blank`, `noopener,noreferrer`);
+    if (!win) window.location.href = url;
   };
 
   const handleShareFacebook = () => {
-    const url = encodeURIComponent(dataTitleText);
-    window.open(
-      `https://www.facebook.com/sharer/sharer.php?u=${url}`,
-      `_blank`
-    );
+    const shareUrl = getShareUrl(qr);
+    const quote = encodeURIComponent(shareText);
+    const url = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(
+      shareUrl
+    )}&quote=${quote}`;
+    const win = window.open(url, `_blank`, `noopener,noreferrer`);
+    if (!win) window.location.href = url;
   };
 
   const handleEdit = (e: React.MouseEvent) => {
@@ -475,8 +527,14 @@ export function QRCard({
             <DialogDescription>Choose how to share this QR.</DialogDescription>
           </DialogHeader>
           <div className="grid gap-2 py-2">
+            <Button variant="outline" onClick={handleShareCopyImage}>
+              {shareImageCopied ? `Image copied!` : `Copy image`}
+            </Button>
             <Button variant="outline" onClick={handleShareCopy}>
-              {shareCopied ? `Copied!` : `Copy text`}
+              {shareCopied ? `Copied!` : `Copy text (type-specific)`}
+            </Button>
+            <Button variant="outline" onClick={handleCopyJson}>
+              {shareJsonCopied ? `JSON copied!` : `Copy as JSON`}
             </Button>
             <Button variant="outline" onClick={handleShareEmail}>
               Share via Email
