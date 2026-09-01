@@ -80,7 +80,7 @@ export function QRCardSeed({
         <div className="w-full items-center p-0 flex flex-row gap-4">
           <Skeleton className="flex-none mr-1 h-6 w-6" />
           <div className="flex-col space-y-1">
-            <p className="text-sm font-medium leading-none line-clamp-1">
+            <p className="text-sm font-medium leading-normal line-clamp-1">
               Seed the data to start
             </p>
             <p className="text-sm text-muted-foreground truncate">

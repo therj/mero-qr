@@ -1,9 +1,6 @@
-/* eslint-disable @typescript-eslint/no-unused-vars */
-
 'use client';
 
 import {
-  BellIcon,
   DrawingPinFilledIcon as BookmarkedIcon,
   DrawingPinIcon as NotBookmarkedIcon,
   Share1Icon,
@@ -12,16 +9,9 @@ import {
 
 import {
   TrashIcon as HeroTrashIcon,
-  EyeDropperIcon,
-  PencilIcon,
   PencilSquareIcon,
-  InboxStackIcon,
   ArrowDownIcon,
   ClipboardDocumentIcon,
-  ClipboardIcon,
-  PaperClipIcon,
-  ClipboardDocumentCheckIcon,
-  ClipboardDocumentListIcon,
   EyeIcon,
   WifiIcon,
   LinkIcon,
@@ -29,7 +19,6 @@ import {
   EnvelopeIcon,
   ChatBubbleBottomCenterTextIcon,
   UserIcon,
-  UserCircleIcon,
   BookOpenIcon,
 } from '@heroicons/react/24/outline';
 
@@ -43,8 +32,15 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import React, { useEffect, useMemo, useState } from 'react';
-import Link from 'next/link';
 import Image from 'next/image';
 import {
   TBook,
@@ -55,8 +51,11 @@ import {
   TSms,
   TText,
   TQr,
+  TWifi,
 } from '@/types/qr';
 import { QRCodeTypeEnum } from '@/constants/enums';
+import { db } from '@/db';
+import { getShareText, getShareUrl } from '@/helpers/qr/shareText';
 
 const getQrData = (type: QRCodeTypeEnum, data: TQr[`data`]) => {
   let Icon: React.ElementType;
@@ -104,7 +103,7 @@ const getQrData = (type: QRCodeTypeEnum, data: TQr[`data`]) => {
       break;
     case QRCodeTypeEnum.wifi:
       typeText = `WiFi`;
-      const wifiData = data as TContact[`data`];
+      const wifiData = data as TWifi[`data`];
       dataTitleText = wifiData.name;
       Icon = WifiIcon;
       break;
@@ -149,12 +148,35 @@ const getQrData = (type: QRCodeTypeEnum, data: TQr[`data`]) => {
   };
 };
 
-export function QRCard({ className = `shadow sm:flex`, ...props }: TQr) {
-  const { type, title, description, data, isBookmark, ...cardProps } = props;
+type QRCardProps = TQr & {
+  onEdit?: (qr: TQr) => void;
+  onCardClick?: (qr: TQr) => void;
+};
+
+export function QRCard({
+  className = `shadow sm:flex`,
+  onEdit,
+  onCardClick,
+  ...props
+}: QRCardProps) {
+  const { id, type, title, description, data, isBookmark, ...cardProps } =
+    props;
+  const qr = props as TQr;
   const { Icon, typeText, dataTitleText } = getQrData(type, data);
   const cardTitleText = title ?? `Untitled ${typeText ?? `Item`}`;
 
   const [isHovered, setIsHovered] = useState(false);
+  const [isDeleteOpen, setIsDeleteOpen] = useState(false);
+  const [isShareOpen, setIsShareOpen] = useState(false);
+  const [shareCopied, setShareCopied] = useState(false);
+  const [shareImageCopied, setShareImageCopied] = useState(false);
+  const [shareJsonCopied, setShareJsonCopied] = useState(false);
+  const [optimisticBookmark, setOptimisticBookmark] = useState(isBookmark);
+  const [isPinAnimating, setIsPinAnimating] = useState(false);
+
+  useEffect(() => {
+    setOptimisticBookmark(isBookmark);
+  }, [isBookmark]);
 
   const handleMouseEnter = () => {
     setIsHovered(true);
@@ -165,91 +187,389 @@ export function QRCard({ className = `shadow sm:flex`, ...props }: TQr) {
   };
 
   const BookmarkIcon = useMemo(() => {
-    // Select initial icon based on bookmark status
-    let IconToReturn = isBookmark ? BookmarkedIcon : NotBookmarkedIcon;
-
-    // If hovered, toggle the icon
+    let IconToReturn = optimisticBookmark ? BookmarkedIcon : NotBookmarkedIcon;
     if (isHovered) {
-      IconToReturn = isBookmark ? NotBookmarkedIcon : BookmarkedIcon;
+      IconToReturn = optimisticBookmark ? NotBookmarkedIcon : BookmarkedIcon;
     }
     return IconToReturn;
-  }, [isHovered, isBookmark]);
+  }, [isHovered, optimisticBookmark]);
+
+  const handlePinClick = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const next = !optimisticBookmark;
+    setOptimisticBookmark(next);
+    setIsPinAnimating(true);
+    setTimeout(() => setIsPinAnimating(false), 320);
+    try {
+      await db.qrs.update(id, {
+        isBookmark: next,
+        updatedAt: new Date().toISOString(),
+      } as Partial<TQr>);
+    } catch (err) {
+      console.error(`Failed to toggle pin`, err);
+      setOptimisticBookmark(!next);
+    }
+  };
+
+  const handleDelete = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setIsDeleteOpen(true);
+  };
+
+  const confirmDelete = async () => {
+    try {
+      await db.qrs.delete(id);
+      setIsDeleteOpen(false);
+    } catch (err) {
+      console.error(`Failed to delete QR`, err);
+    }
+  };
+
+  const handleCopy = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    try {
+      const res = await fetch(`/qr.png`);
+      const blob = await res.blob();
+      // Try modern image clipboard API
+      if (
+        navigator.clipboard &&
+        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+        (window as unknown as { ClipboardItem?: unknown }).ClipboardItem
+      ) {
+        const ClipboardItemCtor = (
+          window as unknown as { ClipboardItem: typeof ClipboardItem }
+        ).ClipboardItem;
+        const item = new ClipboardItemCtor({
+          [blob.type || `image/png`]: blob,
+        });
+        await navigator.clipboard.write([item]);
+      } else if (navigator.clipboard) {
+        // fallback: copy text representation
+        await navigator.clipboard.writeText(dataTitleText);
+      }
+    } catch (err) {
+      console.error(`Failed to copy image`, err);
+      // fallback to text copy
+      try {
+        await navigator.clipboard.writeText(dataTitleText);
+        // eslint-disable-next-line no-empty
+      } catch {}
+    }
+  };
+
+  const handleDownload = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    try {
+      const res = await fetch(`/qr.png`);
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement(`a`);
+      a.href = url;
+      a.download = `${cardTitleText.replace(/\s+/g, `_`)}-qr.png`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error(`Failed to download`, err);
+    }
+  };
+
+  const handleShare = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setIsShareOpen(true);
+  };
+
+  const shareText = getShareText(qr);
+
+  const handleShareCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(shareText);
+      setShareCopied(true);
+      setTimeout(() => setShareCopied(false), 2000);
+    } catch (err) {
+      console.error(`Failed to share (copy)`, err);
+    }
+  };
+
+  const handleShareCopyImage = async () => {
+    try {
+      const res = await fetch(`/qr.png`);
+      const blob = await res.blob();
+      if (
+        navigator.clipboard &&
+        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+        (window as unknown as { ClipboardItem?: unknown }).ClipboardItem
+      ) {
+        const ClipboardItemCtor = (
+          window as unknown as { ClipboardItem: typeof ClipboardItem }
+        ).ClipboardItem;
+        const item = new ClipboardItemCtor({
+          [blob.type || `image/png`]: blob,
+        });
+        await navigator.clipboard.write([item]);
+      } else {
+        await navigator.clipboard.writeText(shareText);
+      }
+      setShareImageCopied(true);
+      setTimeout(() => setShareImageCopied(false), 2000);
+    } catch (err) {
+      console.error(`Failed to copy image`, err);
+      try {
+        await navigator.clipboard.writeText(shareText);
+        setShareImageCopied(true);
+        setTimeout(() => setShareImageCopied(false), 2000);
+        // eslint-disable-next-line no-empty
+      } catch {}
+    }
+  };
+
+  const handleCopyJson = async () => {
+    try {
+      await navigator.clipboard.writeText(JSON.stringify(qr, null, 2));
+      setShareJsonCopied(true);
+      setTimeout(() => setShareJsonCopied(false), 2000);
+    } catch (err) {
+      console.error(`Failed to copy JSON`, err);
+    }
+  };
+
+  const handleShareEmail = () => {
+    const body = encodeURIComponent(shareText);
+    const subject = encodeURIComponent(cardTitleText);
+    const mailto = `mailto:?subject=${subject}&body=${body}`;
+    window.location.href = mailto;
+  };
+
+  const handleShareX = () => {
+    const text = encodeURIComponent(shareText);
+    const url = `https://twitter.com/intent/tweet?text=${text}`;
+    const win = window.open(url, `_blank`, `noopener,noreferrer`);
+    if (!win) window.location.href = url;
+  };
+
+  const handleShareFacebook = () => {
+    const shareUrl = getShareUrl(qr);
+    const quote = encodeURIComponent(shareText);
+    const url = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(
+      shareUrl
+    )}&quote=${quote}`;
+    const win = window.open(url, `_blank`, `noopener,noreferrer`);
+    if (!win) window.location.href = url;
+  };
+
+  const handleEdit = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (onEdit) {
+      onEdit(qr);
+    } else {
+      window.dispatchEvent(
+        new CustomEvent(`meroqr:openEditModal`, { detail: { qr } })
+      );
+    }
+  };
+
+  const handleCardClick = () => {
+    if (onCardClick) {
+      onCardClick(qr);
+    } else {
+      window.dispatchEvent(
+        new CustomEvent(`meroqr:openReadModal`, { detail: { qr } })
+      );
+    }
+  };
+
+  const handleCardKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === `Enter` || e.key === ` `) {
+      e.preventDefault();
+      handleCardClick();
+    }
+  };
 
   return (
-    <Card
-      className={cn(`flex flex-col relative max-w-full`, className)}
-      {...cardProps}
-    >
-      <CardHeader className="max-w-full mb-auto">
-        <CardTitle className="truncate">{cardTitleText}</CardTitle>
-        <CardDescription className="truncate">{description}</CardDescription>
-      </CardHeader>
-      <CardContent className="max-w-full grid gap-4">
-        <div className="w-full items-center p-0 flex flex-row gap-4">
-          <Icon className="flex-none mr-1 h-6 w-6" />
-          <div className="flex-col space-y-1">
-            <p className="text-sm font-medium leading-none line-clamp-1">
-              {dataTitleText}
-            </p>
-            <p className="text-sm text-muted-foreground truncate">{typeText}</p>
+    <>
+      <Card
+        className={cn(
+          `flex flex-col relative max-w-full cursor-pointer hover:shadow-lg hover:-translate-y-0.5 transition-all duration-500 ease-out will-change-transform`,
+          optimisticBookmark && `ring-1 ring-primary/20 shadow-md`,
+          className
+        )}
+        onClick={handleCardClick}
+        onKeyDown={handleCardKeyDown}
+        role="button"
+        tabIndex={0}
+        aria-label={`Open ${cardTitleText}`}
+        {...cardProps}
+      >
+        <CardHeader className="max-w-full mb-auto">
+          <CardTitle className="truncate pr-8">{cardTitleText}</CardTitle>
+          <CardDescription className="truncate">{description}</CardDescription>
+        </CardHeader>
+        <CardContent className="max-w-full grid gap-4">
+          <div className="w-full items-center p-0 flex flex-row gap-4">
+            <Icon className="flex-none mr-1 h-6 w-6" />
+            <div className="flex-col space-y-1">
+              <p className="text-sm font-medium leading-normal line-clamp-1">
+                {dataTitleText}
+              </p>
+              <p className="text-sm text-muted-foreground truncate">
+                {typeText}
+              </p>
+            </div>
           </div>
-        </div>
-        <Image
-          src="/qr.png"
-          height={200}
-          width={200}
-          alt={`QR Code for ${cardTitleText}`}
-          className="place-self-center dark:contrast-125 dark:brightness-75 mt-auto"
-        />
-      </CardContent>
+          <Image
+            src="/qr.png"
+            height={200}
+            width={200}
+            alt={`QR Code for ${cardTitleText}`}
+            className="place-self-center dark:contrast-125 dark:brightness-75 mt-auto"
+          />
+        </CardContent>
 
-      <CardFooter className="w-full flex flex-row justify-between	bg-muted py-4 mb-0">
-        <div className="flex gap-2">
-          <Button
-            size={`icon`}
-            variant={`ghost`}
-            className="xw-full xflex xitems-center hover:text-primary px-2 py-2"
-          >
-            <ArrowDownIcon className="h-8 w-8" />
-          </Button>
-          <Button
-            size={`icon`}
-            variant={`ghost`}
-            className="xw-full flex items-center hover:text-primary px-2 py-2"
-          >
-            <ClipboardDocumentIcon className="h-8 w-8" />
-          </Button>
-          <Button
-            size={`icon`}
-            variant={`ghost`}
-            className="xw-full xflex xitems-center hover:text-primary px-2 py-2"
-          >
-            <Share1Icon className="h-8 w-8" />
-          </Button>
-        </div>
+        <CardFooter className="w-full flex flex-row justify-between	bg-muted py-4 mb-0">
+          <div className="flex gap-2">
+            <Button
+              size={`icon`}
+              variant={`ghost`}
+              className="hover:text-primary px-2 py-2"
+              onClick={handleDownload}
+              onMouseEnter={handleMouseEnter}
+              onMouseLeave={handleMouseLeave}
+              aria-label="Download QR"
+            >
+              <ArrowDownIcon className="h-8 w-8" />
+            </Button>
+            <Button
+              size={`icon`}
+              variant={`ghost`}
+              className="flex items-center hover:text-primary px-2 py-2"
+              onClick={handleCopy}
+              onMouseEnter={handleMouseEnter}
+              onMouseLeave={handleMouseLeave}
+              aria-label="Copy QR image"
+              title="Copy QR image"
+            >
+              <ClipboardDocumentIcon className="h-8 w-8" />
+            </Button>
+            <Button
+              size={`icon`}
+              variant={`ghost`}
+              className="hover:text-primary px-2 py-2"
+              onClick={handleShare}
+              onMouseEnter={handleMouseEnter}
+              onMouseLeave={handleMouseLeave}
+              aria-label="Share QR (copy text)"
+              title="Copy text to clipboard"
+            >
+              <Share1Icon className="h-8 w-8" />
+            </Button>
+          </div>
 
-        <div className="flex gap-2">
-          <Button
-            size={`icon`}
-            variant={`ghost`}
-            className="xw-full xflex xitems-center hover:text-primary px-2 py-2"
-          >
-            <PencilSquareIcon className="h-8 w-8" />
-          </Button>
-          <Button
-            size={`icon`}
-            variant={`ghost`}
-            className="xw-full xflex xitems-center hover:text-destructive px-2 py-2 hover:none"
-          >
-            <HeroTrashIcon className="h-8 w-8" />
-          </Button>
-        </div>
-      </CardFooter>
-      {React.createElement(BookmarkIcon, {
-        className: `absolute cursor-pointer px-2 py-2 top-4 right-4 h-9 w-9`,
-        onMouseEnter: handleMouseEnter,
-        onMouseLeave: handleMouseLeave,
-      })}
-    </Card>
+          <div className="flex gap-2">
+            <Button
+              size={`icon`}
+              variant={`ghost`}
+              className="hover:text-primary px-2 py-2"
+              onClick={handleEdit}
+              onMouseEnter={handleMouseEnter}
+              onMouseLeave={handleMouseLeave}
+              aria-label="Edit QR"
+            >
+              <PencilSquareIcon className="h-8 w-8" />
+            </Button>
+            <Button
+              size={`icon`}
+              variant={`ghost`}
+              className="hover:text-destructive px-2 py-2"
+              onClick={handleDelete}
+              onMouseEnter={handleMouseEnter}
+              onMouseLeave={handleMouseLeave}
+              aria-label="Delete QR"
+            >
+              <HeroTrashIcon className="h-8 w-8" />
+            </Button>
+          </div>
+        </CardFooter>
+        {React.createElement(BookmarkIcon, {
+          className: cn(
+            `absolute cursor-pointer px-2 py-2 top-4 right-4 h-9 w-9 hover:text-primary will-change-transform transition-all duration-300 ease-out`,
+            isPinAnimating && `scale-[1.25] rotate-[12deg]`,
+            !isPinAnimating && `scale-100 rotate-0`,
+            optimisticBookmark && `text-primary`
+          ),
+          onMouseEnter: handleMouseEnter,
+          onMouseLeave: handleMouseLeave,
+          onClick: handlePinClick,
+          [`aria-label`]: optimisticBookmark ? `Unpin QR` : `Pin QR`,
+          role: `button`,
+          tabIndex: 0,
+          onKeyDown: (e: React.KeyboardEvent) => {
+            if (e.key === `Enter` || e.key === ` `) {
+              e.preventDefault();
+              handlePinClick(e as unknown as React.MouseEvent);
+            }
+          },
+        } as unknown as Record<string, unknown>)}
+      </Card>
+
+      <Dialog open={isDeleteOpen} onOpenChange={setIsDeleteOpen}>
+        <DialogContent
+          className="sm:max-w-md"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <DialogHeader>
+            <DialogTitle>Delete QR?</DialogTitle>
+            <DialogDescription>
+              Delete &quot;{cardTitleText}&quot;? This cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="sm:justify-end gap-2">
+            <Button variant="ghost" onClick={() => setIsDeleteOpen(false)}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={confirmDelete}>
+              Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isShareOpen} onOpenChange={setIsShareOpen}>
+        <DialogContent
+          className="sm:max-w-md"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <DialogHeader>
+            <DialogTitle>Share &quot;{cardTitleText}&quot;</DialogTitle>
+            <DialogDescription>Choose how to share this QR.</DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-2 py-2">
+            <Button variant="outline" onClick={handleShareCopyImage}>
+              {shareImageCopied ? `Image copied!` : `Copy image`}
+            </Button>
+            <Button variant="outline" onClick={handleShareCopy}>
+              {shareCopied ? `Copied!` : `Copy text (type-specific)`}
+            </Button>
+            <Button variant="outline" onClick={handleCopyJson}>
+              {shareJsonCopied ? `JSON copied!` : `Copy as JSON`}
+            </Button>
+            <Button variant="outline" onClick={handleShareEmail}>
+              Share via Email
+            </Button>
+            <Button variant="outline" onClick={handleShareX}>
+              Share on X
+            </Button>
+            <Button variant="outline" onClick={handleShareFacebook}>
+              Share on Facebook
+            </Button>
+          </div>
+          <DialogFooter className="sm:justify-end">
+            <Button variant="ghost" onClick={() => setIsShareOpen(false)}>
+              Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }

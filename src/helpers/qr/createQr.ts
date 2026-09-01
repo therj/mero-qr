@@ -101,3 +101,106 @@ export function createQrFromFormValues(values: QrFormValues): TQr {
       throw new Error(`Unsupported QR type`);
   }
 }
+
+export function qrToFormValues(qr: TQr): QrFormValues {
+  const base = {
+    title: qr.title ?? ``,
+    description: qr.description ?? ``,
+    isBookmark: qr.isBookmark ?? false,
+    type: qr.type,
+  } as Record<string, unknown>;
+  switch (qr.type) {
+    case QRCodeTypeEnum.link:
+      return { ...base, url: (qr.data as { url: string }).url } as QrFormValues;
+    case QRCodeTypeEnum.text:
+      return {
+        ...base,
+        text: (qr.data as { text: string }).text,
+      } as QrFormValues;
+    case QRCodeTypeEnum.wifi: {
+      const d = qr.data as {
+        name: string;
+        networkType: NetworkTypeEnum;
+        password?: string;
+      };
+      return {
+        ...base,
+        name: d.name,
+        networkType: d.networkType,
+        password: d.password ?? ``,
+      } as QrFormValues;
+    }
+    case QRCodeTypeEnum.email: {
+      const d = qr.data as {
+        to: string;
+        cc?: string;
+        subject: string;
+        body?: string;
+      };
+      return {
+        ...base,
+        to: d.to,
+        cc: d.cc ?? ``,
+        subject: d.subject,
+        body: d.body ?? ``,
+      } as QrFormValues;
+    }
+    case QRCodeTypeEnum.phone: {
+      const d = qr.data as {
+        phoneNumber: string;
+        name?: string;
+        email?: string;
+      };
+      return {
+        ...base,
+        phoneNumber: d.phoneNumber,
+        name: d.name ?? ``,
+        email: d.email ?? ``,
+      } as QrFormValues;
+    }
+    case QRCodeTypeEnum.contact: {
+      const d = qr.data as {
+        name: string;
+        phoneNumber: string;
+        email?: string;
+        company?: string;
+        jobTitle?: string;
+      };
+      return {
+        ...base,
+        name: d.name,
+        phoneNumber: d.phoneNumber,
+        email: d.email ?? ``,
+        company: d.company ?? ``,
+        jobTitle: d.jobTitle ?? ``,
+      } as QrFormValues;
+    }
+    case QRCodeTypeEnum.sms: {
+      const d = qr.data as { to: string; text?: string };
+      return { ...base, to: d.to, text: d.text ?? `` } as QrFormValues;
+    }
+    case QRCodeTypeEnum.book: {
+      const d = qr.data as { title: string; author?: string; isbn13?: string };
+      return {
+        ...base,
+        bookTitle: d.title,
+        author: d.author ?? ``,
+        isbn13: d.isbn13 ?? ``,
+      } as QrFormValues;
+    }
+    default:
+      return base as QrFormValues;
+  }
+}
+
+export function applyFormValuesToQr(existing: TQr, values: QrFormValues): TQr {
+  const updatedData = createQrFromFormValues(values) as TQr;
+  return {
+    ...existing,
+    title: updatedData.title,
+    description: updatedData.description,
+    isBookmark: updatedData.isBookmark,
+    data: updatedData.data,
+    updatedAt: new Date().toISOString(),
+  } as TQr;
+}
