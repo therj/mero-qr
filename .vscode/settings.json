@@ -21,7 +21,7 @@
     // "editor.defaultFormatter": "vscode.typescript-language-features"
   },
   "editor.codeActionsOnSave": {
-    "source.fixAll.eslint": true
+    "source.fixAll.eslint": "explicit"
   },
   "eslint.validate": [
     "javascript",
@@ -30,5 +30,11 @@
     "typescriptreact"
   ],
   "files.autoSave": "onFocusChange",
-  "editor.wordWrapColumn": 100
+  "editor.wordWrapColumn": 100,
+  "editor.quickSuggestions": {
+    "strings": true
+  },
+  "css.validate": false,
+  "editor.inlineSuggest.enabled": true,
+  "tailwindCSS.emmetCompletions": true
 }
