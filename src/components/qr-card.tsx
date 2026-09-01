@@ -40,7 +40,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import Image from 'next/image';
 import {
   TBook,
@@ -171,6 +171,12 @@ export function QRCard({
   const [shareCopied, setShareCopied] = useState(false);
   const [shareImageCopied, setShareImageCopied] = useState(false);
   const [shareJsonCopied, setShareJsonCopied] = useState(false);
+  const [optimisticBookmark, setOptimisticBookmark] = useState(isBookmark);
+  const [isPinAnimating, setIsPinAnimating] = useState(false);
+
+  useEffect(() => {
+    setOptimisticBookmark(isBookmark);
+  }, [isBookmark]);
 
   const handleMouseEnter = () => {
     setIsHovered(true);
@@ -181,22 +187,27 @@ export function QRCard({
   };
 
   const BookmarkIcon = useMemo(() => {
-    let IconToReturn = isBookmark ? BookmarkedIcon : NotBookmarkedIcon;
+    let IconToReturn = optimisticBookmark ? BookmarkedIcon : NotBookmarkedIcon;
     if (isHovered) {
-      IconToReturn = isBookmark ? NotBookmarkedIcon : BookmarkedIcon;
+      IconToReturn = optimisticBookmark ? NotBookmarkedIcon : BookmarkedIcon;
     }
     return IconToReturn;
-  }, [isHovered, isBookmark]);
+  }, [isHovered, optimisticBookmark]);
 
   const handlePinClick = async (e: React.MouseEvent) => {
     e.stopPropagation();
+    const next = !optimisticBookmark;
+    setOptimisticBookmark(next);
+    setIsPinAnimating(true);
+    setTimeout(() => setIsPinAnimating(false), 320);
     try {
       await db.qrs.update(id, {
-        isBookmark: !isBookmark,
+        isBookmark: next,
         updatedAt: new Date().toISOString(),
       } as Partial<TQr>);
     } catch (err) {
       console.error(`Failed to toggle pin`, err);
+      setOptimisticBookmark(!next);
     }
   };
 
@@ -379,7 +390,8 @@ export function QRCard({
     <>
       <Card
         className={cn(
-          `flex flex-col relative max-w-full cursor-pointer hover:shadow-md transition-shadow`,
+          `flex flex-col relative max-w-full cursor-pointer hover:shadow-lg hover:-translate-y-0.5 transition-all duration-500 ease-out will-change-transform`,
+          optimisticBookmark && `ring-1 ring-primary/20 shadow-md`,
           className
         )}
         onClick={handleCardClick}
@@ -479,11 +491,16 @@ export function QRCard({
           </div>
         </CardFooter>
         {React.createElement(BookmarkIcon, {
-          className: `absolute cursor-pointer px-2 py-2 top-4 right-4 h-9 w-9 hover:text-primary transition-colors`,
+          className: cn(
+            `absolute cursor-pointer px-2 py-2 top-4 right-4 h-9 w-9 hover:text-primary will-change-transform transition-all duration-300 ease-out`,
+            isPinAnimating && `scale-[1.25] rotate-[12deg]`,
+            !isPinAnimating && `scale-100 rotate-0`,
+            optimisticBookmark && `text-primary`
+          ),
           onMouseEnter: handleMouseEnter,
           onMouseLeave: handleMouseLeave,
           onClick: handlePinClick,
-          [`aria-label`]: isBookmark ? `Unpin QR` : `Pin QR`,
+          [`aria-label`]: optimisticBookmark ? `Unpin QR` : `Pin QR`,
           role: `button`,
           tabIndex: 0,
           onKeyDown: (e: React.KeyboardEvent) => {
