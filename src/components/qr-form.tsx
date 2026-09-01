@@ -47,6 +47,7 @@ function getDefaultValues(type: QRCodeTypeEnum | null): Partial<QrFormValues> {
     title: ``,
     description: ``,
     isBookmark: false,
+    tags: [] as string[],
   };
   if (!type) return { ...base } as Partial<QrFormValues>;
   switch (type) {
@@ -195,7 +196,14 @@ export function QrForm({
         <div className="divide-y rounded-md border p-3">
           {displayRow(`Title`, values.title as string)}
           {displayRow(`Description`, values.description as string)}
-          {displayRow(`Pinned`, values.isBookmark ? `Yes` : `No`)}
+          {displayRow(`Tags`, (values.tags as unknown as string[])?.join(`, `))}
+          {displayRow(
+            `Pinned`,
+            (values.isBookmark as unknown as boolean) ||
+              (values.favorite as unknown as boolean)
+              ? `Yes`
+              : `No`
+          )}
           {type === QRCodeTypeEnum.link &&
             displayRow(`URL`, values.url as string)}
           {type === QRCodeTypeEnum.text &&
@@ -287,6 +295,33 @@ export function QrForm({
                   disabled={readOnly}
                   {...field}
                   value={field.value ?? ``}
+                />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        <FormField
+          control={form.control as never}
+          name="tags"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Tags (optional)</FormLabel>
+              <FormControl>
+                <Input
+                  placeholder="home, work, personal (comma separated)"
+                  disabled={readOnly}
+                  value={(field.value as unknown as string[])?.join(`, `) ?? ``}
+                  onChange={(e) => {
+                    const arr = e.target.value
+                      .split(`,`)
+                      .map((t) => t.trim())
+                      .filter(Boolean);
+                    field.onChange(arr);
+                  }}
+                  onBlur={field.onBlur}
+                  name={field.name}
+                  ref={field.ref}
                 />
               </FormControl>
               <FormMessage />

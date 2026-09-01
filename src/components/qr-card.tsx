@@ -436,6 +436,18 @@ export function QRCard({
               </p>
             </div>
           </div>
+          {qr.tags && qr.tags.length > 0 && (
+            <div className="flex flex-wrap gap-1">
+              {qr.tags.map((tag) => (
+                <span
+                  key={tag}
+                  className="text-xs bg-muted px-2 py-0.5 rounded-full"
+                >
+                  #{tag}
+                </span>
+              ))}
+            </div>
+          )}
           <Image
             src={qrDataUrl}
             height={200}
