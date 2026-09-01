@@ -12,6 +12,7 @@ import {
   PencilSquareIcon,
   ArrowDownIcon,
   ClipboardDocumentIcon,
+  DocumentDuplicateIcon,
   EyeIcon,
   WifiIcon,
   LinkIcon,
@@ -54,8 +55,12 @@ import {
   TWifi,
 } from '@/types/qr';
 import { QRCodeTypeEnum } from '@/constants/enums';
-import { db } from '@/db';
 import { getShareText, getShareUrl } from '@/helpers/qr/shareText';
+import { qrRepository } from '@/lib/storage/dexieQrRepository';
+import { qrToContent } from '@/helpers/qr/toContent';
+import { generateQrDataUrl, qrGenerator } from '@/lib/qr/generator';
+import { getDeviceId } from '@/lib/device';
+import { nanoid } from 'nanoid';
 
 const getQrData = (type: QRCodeTypeEnum, data: TQr[`data`]) => {
   let Icon: React.ElementType;
@@ -159,11 +164,14 @@ export function QRCard({
   onCardClick,
   ...props
 }: QRCardProps) {
-  const { id, type, title, description, data, isBookmark, ...cardProps } =
-    props;
+  const { id, type, title, description, data, ...cardProps } = props;
   const qr = props as TQr;
   const { Icon, typeText, dataTitleText } = getQrData(type, data);
   const cardTitleText = title ?? `Untitled ${typeText ?? `Item`}`;
+  const initialFav =
+    (qr as unknown as { favorite?: boolean }).favorite ??
+    (qr as unknown as { isBookmark?: boolean }).isBookmark ??
+    false;
 
   const [isHovered, setIsHovered] = useState(false);
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
@@ -171,12 +179,33 @@ export function QRCard({
   const [shareCopied, setShareCopied] = useState(false);
   const [shareImageCopied, setShareImageCopied] = useState(false);
   const [shareJsonCopied, setShareJsonCopied] = useState(false);
-  const [optimisticBookmark, setOptimisticBookmark] = useState(isBookmark);
+  const [optimisticBookmark, setOptimisticBookmark] = useState(initialFav);
   const [isPinAnimating, setIsPinAnimating] = useState(false);
+  const [qrDataUrl, setQrDataUrl] = useState<string>(`/qr.png`);
+  const qrContent = qrToContent(qr);
+  const shareText = getShareText(qr);
 
   useEffect(() => {
-    setOptimisticBookmark(isBookmark);
-  }, [isBookmark]);
+    const fav =
+      (qr as unknown as { favorite?: boolean }).favorite ??
+      (qr as unknown as { isBookmark?: boolean }).isBookmark ??
+      false;
+    setOptimisticBookmark(fav);
+  }, [qr]);
+
+  useEffect(() => {
+    let cancelled = false;
+    generateQrDataUrl(qrContent)
+      .then((url) => {
+        if (!cancelled) setQrDataUrl(url);
+      })
+      .catch(() => {
+        if (!cancelled) setQrDataUrl(`/qr.png`);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [qrContent]);
 
   const handleMouseEnter = () => {
     setIsHovered(true);
@@ -201,10 +230,10 @@ export function QRCard({
     setIsPinAnimating(true);
     setTimeout(() => setIsPinAnimating(false), 320);
     try {
-      await db.qrs.update(id, {
+      await qrRepository.patch(id, {
+        favorite: next,
         isBookmark: next,
-        updatedAt: new Date().toISOString(),
-      } as Partial<TQr>);
+      } as unknown as Partial<TQr>);
     } catch (err) {
       console.error(`Failed to toggle pin`, err);
       setOptimisticBookmark(!next);
@@ -218,7 +247,7 @@ export function QRCard({
 
   const confirmDelete = async () => {
     try {
-      await db.qrs.delete(id);
+      await qrRepository.delete(id);
       setIsDeleteOpen(false);
     } catch (err) {
       console.error(`Failed to delete QR`, err);
@@ -228,9 +257,7 @@ export function QRCard({
   const handleCopy = async (e: React.MouseEvent) => {
     e.stopPropagation();
     try {
-      const res = await fetch(`/qr.png`);
-      const blob = await res.blob();
-      // Try modern image clipboard API
+      const blob = await qrGenerator.generate(qrContent);
       if (
         navigator.clipboard &&
         // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
@@ -244,12 +271,10 @@ export function QRCard({
         });
         await navigator.clipboard.write([item]);
       } else if (navigator.clipboard) {
-        // fallback: copy text representation
         await navigator.clipboard.writeText(dataTitleText);
       }
     } catch (err) {
       console.error(`Failed to copy image`, err);
-      // fallback to text copy
       try {
         await navigator.clipboard.writeText(dataTitleText);
         // eslint-disable-next-line no-empty
@@ -260,8 +285,7 @@ export function QRCard({
   const handleDownload = async (e: React.MouseEvent) => {
     e.stopPropagation();
     try {
-      const res = await fetch(`/qr.png`);
-      const blob = await res.blob();
+      const blob = await qrGenerator.generate(qrContent);
       const url = URL.createObjectURL(blob);
       const a = document.createElement(`a`);
       a.href = url;
@@ -275,12 +299,19 @@ export function QRCard({
     }
   };
 
-  const handleShare = (e: React.MouseEvent) => {
+  const handleShare = async (e: React.MouseEvent) => {
     e.stopPropagation();
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: cardTitleText, text: shareText });
+        return;
+      } catch (err) {
+        if ((err as Error).name === `AbortError`) return;
+        // fallback to dialog
+      }
+    }
     setIsShareOpen(true);
   };
-
-  const shareText = getShareText(qr);
 
   const handleShareCopy = async () => {
     try {
@@ -294,8 +325,7 @@ export function QRCard({
 
   const handleShareCopyImage = async () => {
     try {
-      const res = await fetch(`/qr.png`);
-      const blob = await res.blob();
+      const blob = await qrGenerator.generate(qrContent);
       if (
         navigator.clipboard &&
         // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
@@ -369,6 +399,28 @@ export function QRCard({
     }
   };
 
+  const handleDuplicate = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    try {
+      const now = Date.now();
+      const deviceId = getDeviceId();
+      const dup: TQr = {
+        ...qr,
+        id: nanoid(),
+        title: qr.title ? `Copy of ${qr.title}` : `Copy of ${cardTitleText}`,
+        createdAt: now,
+        updatedAt: now,
+        createdByDeviceId: deviceId,
+        updatedByDeviceId: deviceId,
+        version: 1,
+        deletedAt: null,
+      } as TQr;
+      await qrRepository.create(dup);
+    } catch (err) {
+      console.error(`Failed to duplicate`, err);
+    }
+  };
+
   const handleCardClick = () => {
     if (onCardClick) {
       onCardClick(qr);
@@ -417,12 +469,25 @@ export function QRCard({
               </p>
             </div>
           </div>
+          {qr.tags && qr.tags.length > 0 && (
+            <div className="flex flex-wrap gap-1">
+              {qr.tags.map((tag) => (
+                <span
+                  key={tag}
+                  className="text-xs bg-muted px-2 py-0.5 rounded-full"
+                >
+                  #{tag}
+                </span>
+              ))}
+            </div>
+          )}
           <Image
-            src="/qr.png"
+            src={qrDataUrl}
             height={200}
             width={200}
             alt={`QR Code for ${cardTitleText}`}
             className="place-self-center dark:contrast-125 dark:brightness-75 mt-auto"
+            unoptimized
           />
         </CardContent>
 
@@ -476,6 +541,18 @@ export function QRCard({
               aria-label="Edit QR"
             >
               <PencilSquareIcon className="h-8 w-8" />
+            </Button>
+            <Button
+              size={`icon`}
+              variant={`ghost`}
+              className="hover:text-primary px-2 py-2"
+              onClick={handleDuplicate}
+              onMouseEnter={handleMouseEnter}
+              onMouseLeave={handleMouseLeave}
+              aria-label="Duplicate QR"
+              title="Duplicate"
+            >
+              <DocumentDuplicateIcon className="h-8 w-8" />
             </Button>
             <Button
               size={`icon`}

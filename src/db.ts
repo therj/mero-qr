@@ -4,9 +4,6 @@ import Dexie, { Table } from 'dexie';
 import { TQr } from '@/types/qr';
 
 export class MySubClassedDexie extends Dexie {
-  // 'qrs' is added by dexie when declaring the stores()
-  // We just tell the typing system this is the case
-
   qrs!: Table<TQr>;
 
   constructor() {
@@ -14,6 +11,14 @@ export class MySubClassedDexie extends Dexie {
     this.version(1).stores({
       qrs: `id, type, title, description, isBookmark, *createdAt, *updatedAt, data`,
     });
+    // v2: spec QRCodeRecord - wipe old data (alpha, manual migrate)
+    this.version(2)
+      .stores({
+        qrs: `id, type, title, description, favorite, *createdAt, *updatedAt, *tags, *version, *deletedAt, data, content`,
+      })
+      .upgrade(async (tx) => {
+        await tx.table(`qrs`).clear();
+      });
   }
 }
 

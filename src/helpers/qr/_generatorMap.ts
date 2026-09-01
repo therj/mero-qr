@@ -14,15 +14,26 @@ import {
   TWifiOpenData,
   TWifi,
 } from '@/types/qr';
+import { qrToContent } from '@/helpers/qr/toContent';
 
 const getQrBaseData = (): Omit<IBaseQr, `type`> => {
+  const now = Date.now();
+  const fav = faker.datatype.boolean({ probability: 0.15 });
   return {
     id: nanoid(),
     title: faker.lorem.words({ min: 2, max: 4 }),
     description: faker.lorem.sentence({ min: 2, max: 7 }),
-    isBookmark: faker.datatype.boolean({ probability: 0.15 }),
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
+    tags: [],
+    favorite: fav,
+    isBookmark: fav,
+    createdAt: faker.date.recent({ days: 30 }).getTime(),
+    updatedAt: now,
+    createdByDeviceId: `seed-device`,
+    updatedByDeviceId: `seed-device`,
+    version: 1,
+    deletedAt: null,
+    metadata: { source: `created` },
+    content: ``,
   };
 };
 
@@ -45,6 +56,7 @@ const generateRandomBookQrCodeData = (): TBook => {
     BookData.data = R.omit([`isbn13`], BookData.data);
   }
 
+  BookData.content = qrToContent(BookData);
   return BookData;
 };
 
@@ -72,6 +84,7 @@ const generateRandomContactQrCodeData = (): TContact => {
     contactData.data = R.omit([`jobTitle`], contactData.data);
   }
 
+  contactData.content = qrToContent(contactData);
   return contactData;
 };
 
@@ -95,6 +108,7 @@ const generateRandomEmailQrCodeData = (): TEmail => {
     emailData.data = R.omit([`body`], emailData.data);
   }
 
+  emailData.content = qrToContent(emailData);
   return emailData;
 };
 
@@ -108,6 +122,7 @@ const generateRandomLinkQrCodeData = (): TLink => {
     },
   };
 
+  textData.content = qrToContent(textData);
   return textData;
 };
 
@@ -130,6 +145,7 @@ const generateRandomPhoneQrCodeData = (): TPhone => {
     phoneData.data = R.omit([`email`], phoneData.data);
   }
 
+  phoneData.content = qrToContent(phoneData);
   return phoneData;
 };
 
@@ -148,6 +164,7 @@ const generateRandomSmsQrCodeData = (): TSms => {
     smsData.data = R.omit([`text`], smsData.data);
   }
 
+  smsData.content = qrToContent(smsData);
   return smsData;
 };
 
@@ -161,6 +178,7 @@ const generateRandomTextQrCodeData = (): TText => {
     },
   };
 
+  textData.content = qrToContent(textData);
   return textData;
 };
 
@@ -184,6 +202,7 @@ const generateRandomWifiQrCodeData = (type?: NetworkTypeEnum): TWifi => {
     wifiData.data = R.omit([`password`], wifiData.data) as TWifiOpenData;
   }
 
+  wifiData.content = qrToContent(wifiData);
   return wifiData;
 };
 

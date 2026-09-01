@@ -14,7 +14,11 @@ const getQrCodeData = <T extends QRCodeTypeEnum>(
     ? TQr
     : ReturnType<(typeof qrMap)[T]>;
 
-  if (options?.isBookmark) {
+  const fav =
+    (options as unknown as { favorite?: boolean })?.favorite ??
+    options?.isBookmark;
+  if (fav) {
+    (qrData as unknown as { favorite: boolean }).favorite = true;
     qrData.isBookmark = true;
   }
 

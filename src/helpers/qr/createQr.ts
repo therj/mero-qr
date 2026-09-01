@@ -3,37 +3,60 @@ import { nanoid } from 'nanoid';
 import { QRCodeTypeEnum, NetworkTypeEnum } from '@/constants/enums';
 import { TQr } from '@/types/qr';
 import { QrFormValues } from '@/lib/validations/qr';
+import { getDeviceId } from '@/lib/device';
+import { qrToContent } from '@/helpers/qr/toContent';
 
 function getBaseFields(values: QrFormValues) {
+  const now = Date.now();
+  const deviceId = getDeviceId();
+  const favorite =
+    (values as unknown as { favorite?: boolean }).favorite ??
+    values.isBookmark ??
+    false;
   return {
     id: nanoid(),
     title: values.title?.trim() || undefined,
     description: values.description?.trim() || undefined,
-    isBookmark: values.isBookmark ?? false,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
+    tags: (values as unknown as { tags?: string[] }).tags ?? [],
+    favorite,
+    isBookmark: favorite,
+    createdAt: now,
+    updatedAt: now,
+    createdByDeviceId: deviceId,
+    updatedByDeviceId: deviceId,
+    version: 1,
+    deletedAt: null,
+    metadata: { source: `created` as const },
   };
+}
+
+function attachContent<T extends TQr>(qr: T): T {
+  const content = qrToContent(qr);
+  return { ...qr, content } as T;
 }
 
 export function createQrFromFormValues(values: QrFormValues): TQr {
   const base = getBaseFields(values);
 
+  let qr: TQr;
   switch (values.type) {
     case QRCodeTypeEnum.link:
-      return {
+      qr = {
         ...base,
         type: QRCodeTypeEnum.link,
         data: { url: values.url.trim() },
-      };
+      } as TQr;
+      break;
     case QRCodeTypeEnum.text:
-      return {
+      qr = {
         ...base,
         type: QRCodeTypeEnum.text,
         data: { text: values.text },
-      };
+      } as TQr;
+      break;
     case QRCodeTypeEnum.wifi: {
       const isOpen = values.networkType === NetworkTypeEnum.open;
-      return {
+      qr = {
         ...base,
         type: QRCodeTypeEnum.wifi,
         data: isOpen
@@ -44,9 +67,10 @@ export function createQrFromFormValues(values: QrFormValues): TQr {
               password: values.password!,
             },
       } as TQr;
+      break;
     }
     case QRCodeTypeEnum.email:
-      return {
+      qr = {
         ...base,
         type: QRCodeTypeEnum.email,
         data: {
@@ -55,9 +79,10 @@ export function createQrFromFormValues(values: QrFormValues): TQr {
           subject: values.subject,
           body: values.body?.trim() || undefined,
         },
-      };
+      } as TQr;
+      break;
     case QRCodeTypeEnum.phone:
-      return {
+      qr = {
         ...base,
         type: QRCodeTypeEnum.phone,
         data: {
@@ -65,9 +90,10 @@ export function createQrFromFormValues(values: QrFormValues): TQr {
           name: values.name?.trim() || undefined,
           email: values.email?.trim() || undefined,
         },
-      };
+      } as TQr;
+      break;
     case QRCodeTypeEnum.contact:
-      return {
+      qr = {
         ...base,
         type: QRCodeTypeEnum.contact,
         data: {
@@ -77,18 +103,20 @@ export function createQrFromFormValues(values: QrFormValues): TQr {
           company: values.company?.trim() || undefined,
           jobTitle: values.jobTitle?.trim() || undefined,
         },
-      };
+      } as TQr;
+      break;
     case QRCodeTypeEnum.sms:
-      return {
+      qr = {
         ...base,
         type: QRCodeTypeEnum.sms,
         data: {
           to: values.to,
           text: values.text?.trim() || undefined,
         },
-      };
+      } as TQr;
+      break;
     case QRCodeTypeEnum.book:
-      return {
+      qr = {
         ...base,
         type: QRCodeTypeEnum.book,
         data: {
@@ -96,17 +124,27 @@ export function createQrFromFormValues(values: QrFormValues): TQr {
           author: values.author?.trim() || undefined,
           isbn13: values.isbn13?.trim() || undefined,
         },
-      };
+      } as TQr;
+      break;
     default:
       throw new Error(`Unsupported QR type`);
   }
+  return attachContent(qr);
 }
 
 export function qrToFormValues(qr: TQr): QrFormValues {
   const base = {
     title: qr.title ?? ``,
     description: qr.description ?? ``,
-    isBookmark: qr.isBookmark ?? false,
+    isBookmark:
+      (qr as unknown as { favorite?: boolean }).favorite ??
+      qr.isBookmark ??
+      false,
+    favorite:
+      (qr as unknown as { favorite?: boolean }).favorite ??
+      qr.isBookmark ??
+      false,
+    tags: (qr as unknown as { tags?: string[] }).tags ?? [],
     type: qr.type,
   } as Record<string, unknown>;
   switch (qr.type) {
@@ -195,12 +233,19 @@ export function qrToFormValues(qr: TQr): QrFormValues {
 
 export function applyFormValuesToQr(existing: TQr, values: QrFormValues): TQr {
   const updatedData = createQrFromFormValues(values) as TQr;
+  const now = Date.now();
+  const deviceId = getDeviceId();
   return {
     ...existing,
     title: updatedData.title,
     description: updatedData.description,
-    isBookmark: updatedData.isBookmark,
+    tags: (updatedData as unknown as { tags: string[] }).tags ?? [],
+    favorite: (updatedData as unknown as { favorite: boolean }).favorite,
+    isBookmark: (updatedData as unknown as { favorite: boolean }).favorite,
     data: updatedData.data,
-    updatedAt: new Date().toISOString(),
+    content: updatedData.content,
+    updatedAt: now,
+    updatedByDeviceId: deviceId,
+    version: (existing.version ?? 1) + 1,
   } as TQr;
 }

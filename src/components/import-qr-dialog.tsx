@@ -2,9 +2,10 @@
 
 import { useState } from 'react';
 
-import { db } from '@/db';
 import { TQr } from '@/types/qr';
 import { QRCodeTypeEnum } from '@/constants/enums';
+import { qrRepository } from '@/lib/storage/dexieQrRepository';
+import { getDeviceId } from '@/lib/device';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -61,12 +62,38 @@ export function ImportQrDialog({ isOpen, onToggle }: ImportQrDialogProps) {
       return;
     }
     try {
-      // ensure updatedAt is fresh, keep original id
-      const toAdd = valid.map((q) => ({
-        ...q,
-        updatedAt: new Date().toISOString(),
-      }));
-      await db.qrs.bulkPut(toAdd);
+      const now = Date.now();
+      const deviceId = getDeviceId();
+      const toAdd = valid.map((q) => {
+        const rawQ = q as unknown as Record<string, unknown>;
+        const fav =
+          (rawQ.favorite as boolean) ?? (rawQ.isBookmark as boolean) ?? false;
+        const createdAtRaw = rawQ.createdAt as unknown;
+        let createdAt: number;
+        if (typeof createdAtRaw === `number`) {
+          createdAt = createdAtRaw;
+        } else if (typeof createdAtRaw === `string`) {
+          createdAt = Date.parse(createdAtRaw as string) || now;
+        } else {
+          createdAt = now;
+        }
+        return {
+          ...q,
+          tags: (rawQ.tags as string[]) ?? [],
+          favorite: fav,
+          isBookmark: fav,
+          createdAt,
+          updatedAt: now,
+          createdByDeviceId: (rawQ.createdByDeviceId as string) ?? deviceId,
+          updatedByDeviceId: deviceId,
+          version: (rawQ.version as number) ?? 1,
+          deletedAt: (rawQ.deletedAt as number | null) ?? null,
+          metadata: (rawQ.metadata as TQr[`metadata`]) ?? {
+            source: `imported`,
+          },
+        } as TQr;
+      });
+      await qrRepository.bulkPut(toAdd);
       setSuccess(`Imported ${toAdd.length} QR(s)`);
       setRaw(``);
       setTimeout(() => onToggle(false), 800);

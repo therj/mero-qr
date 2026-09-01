@@ -8,26 +8,52 @@ import {
   HomeIcon,
   PlayIcon,
   ArrowUpTrayIcon,
+  ArrowDownTrayIcon,
+  MagnifyingGlassIcon,
 } from '@heroicons/react/24/outline';
-import { db } from '@/db';
 import { PlusIcon } from '@radix-ui/react-icons';
 import { useEffect, useState } from 'react';
+import { qrRepository } from '@/lib/storage/dexieQrRepository';
+import { useSearch } from '@/providers/search-provider';
+
 import { Button } from './ui/button';
 import { ThemeToggle } from './theme-provider';
 import AddQrModal from './add-qr-modal';
 import { ImportQrDialog } from './import-qr-dialog';
+import { Input } from './ui/input';
 
 const deleteAllItems = () => {
-  db.qrs.clear();
+  qrRepository.clear();
+};
+
+const handleExport = async () => {
+  try {
+    const all = await qrRepository.list();
+    const blob = new Blob([JSON.stringify(all, null, 2)], {
+      type: `application/json`,
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement(`a`);
+    a.href = url;
+    a.download = `mero-qr-export-${new Date().toISOString().slice(0, 10)}.json`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  } catch (e) {
+    console.error(`Export failed`, e);
+  }
 };
 
 function NavBar({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
   const isHome = usePathname() === `/`;
   const isDesign = usePathname() === `/design`;
+  const isVault = isHome || isDesign;
   const baseClasses = `border-b-2 py-2 px-4 sm:px-8 lg:px-4`;
 
   const [isOpen, setIsOpen] = useState(false);
   const [isImportOpen, setIsImportOpen] = useState(false);
+  const { query, setQuery } = useSearch();
 
   const toggleDialog = (setOpen: boolean) => {
     setIsOpen(setOpen);
@@ -70,9 +96,20 @@ function NavBar({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
             </Button>
           </Link>
         </Button>
+        {isVault && (
+          <div className="flex-1 flex justify-center mx-2 sm:mx-4 max-w-md relative">
+            <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+            <Input
+              placeholder="Search title, content, tags..."
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              className="pl-9 w-full"
+            />
+          </div>
+        )}
         <div className="flex flex-row items-center justify-stretch space-x-3 md:space-x-0 rtl:space-x-reverse gap-2">
           <ThemeToggle className="order-2" />
-          {isDesign && (
+          {isVault && (
             <Button
               size={`lg`}
               variant={`outline`}
@@ -89,7 +126,7 @@ function NavBar({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
               </Button>
             </Button>
           )}
-          {isDesign && (
+          {isVault && (
             <Button
               size={`lg`}
               variant={`outline`}
@@ -106,7 +143,7 @@ function NavBar({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
               </Button>
             </Button>
           )}
-          {isDesign && (
+          {isVault && (
             <Button
               size={`lg`}
               variant={`outline`}
@@ -120,6 +157,23 @@ function NavBar({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
                 title="Import QR as JSON"
               >
                 <ArrowUpTrayIcon className="w-6 h-6 px-px py-px" />
+              </Button>
+            </Button>
+          )}
+          {isVault && (
+            <Button
+              size={`lg`}
+              variant={`outline`}
+              className="text-base p-2 hover:cursor-pointer"
+              asChild
+            >
+              <Button
+                variant={`link`}
+                className="flex flex-row items-center gap-2 text-primary hover:bg-primary hover:bg-opacity-10"
+                onClick={handleExport}
+                title="Export QRs as JSON"
+              >
+                <ArrowDownTrayIcon className="w-6 h-6 px-px py-px" />
               </Button>
             </Button>
           )}

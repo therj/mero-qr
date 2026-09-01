@@ -1,3 +1,5 @@
+import * as React from 'react';
+
 import { QRCodeTypeEnum, NetworkTypeEnum } from '@/constants/enums';
 
 export type TCard = React.ForwardRefExoticComponent<
@@ -9,9 +11,21 @@ export interface IBaseQr extends React.ComponentProps<TCard> {
   type: QRCodeTypeEnum;
   title?: string;
   description?: string;
+  tags: string[];
+  favorite: boolean;
+  // compat: old field, use favorite going forward
   isBookmark?: boolean;
-  createdAt: string; // ISOString
-  updatedAt: string; // ISOString
+  createdAt: number;
+  updatedAt: number;
+  createdByDeviceId: string;
+  updatedByDeviceId: string;
+  version: number;
+  deletedAt?: number | null;
+  metadata?: {
+    source?: `created` | `scanned` | `imported` | `synced`;
+    originalFormat?: string;
+  };
+  content?: string;
 }
 
 export type TWifiOpenData = {
@@ -100,3 +114,8 @@ export type TQr =
   | TPhone
   | TBook
   | TSms;
+
+// Helper to get favorite regardless of old/new field
+export function getFavorite(qr: IBaseQr): boolean {
+  return qr.favorite ?? qr.isBookmark ?? false;
+}
