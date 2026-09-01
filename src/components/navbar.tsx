@@ -6,7 +6,7 @@ import { cn } from '@/lib/utils';
 import { ArrowPathIcon, HomeIcon, PlayIcon } from '@heroicons/react/24/outline';
 import { db } from '@/db';
 import { PlusIcon } from '@radix-ui/react-icons';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Button } from './ui/button';
 import { ThemeToggle } from './theme-provider';
 import AddQrModal from './add-qr-modal';
@@ -25,6 +25,12 @@ function NavBar({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
   const toggleDialog = (setOpen: boolean) => {
     setIsOpen(setOpen);
   };
+
+  useEffect(() => {
+    const handler = () => setIsOpen(true);
+    window.addEventListener(`meroqr:openAddModal`, handler);
+    return () => window.removeEventListener(`meroqr:openAddModal`, handler);
+  }, []);
 
   return (
     <nav

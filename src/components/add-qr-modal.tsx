@@ -10,7 +10,7 @@ import {
   DialogOverlay,
   DialogTitle,
 } from '@ui/dialog';
-import { Fragment, useState } from 'react';
+import { Fragment, useEffect, useState } from 'react';
 import {
   Select,
   SelectContent,
@@ -22,19 +22,49 @@ import {
 } from '@/components/ui/select';
 import { QRCodeTypeEnum, QRGroup } from '@/constants/enums';
 import { DialogProps } from '@radix-ui/react-dialog';
+import { TQr } from '@/types/qr';
 import { Button } from './ui/button';
 import { QrForm } from './qr-form';
 
 export interface AddQrModalProps extends DialogProps {
   isOpen: boolean;
   onToggleDialog: (dialogState: boolean) => void;
+  initialData?: TQr | null;
+  readOnly?: boolean;
 }
-const AddQrModal = ({ onToggleDialog, isOpen }: AddQrModalProps) => {
-  const [QRToAdd, setQRToAdd] = useState<QRCodeTypeEnum | null>(null);
+
+const AddQrModal = ({
+  onToggleDialog,
+  isOpen,
+  initialData,
+  readOnly = false,
+}: AddQrModalProps) => {
+  const [QRToAdd, setQRToAdd] = useState<QRCodeTypeEnum | null>(
+    initialData?.type ?? null
+  );
+  const [isReadOnly, setIsReadOnly] = useState(readOnly);
+
+  useEffect(() => {
+    setIsReadOnly(readOnly);
+  }, [readOnly]);
+
+  useEffect(() => {
+    if (isOpen && initialData) {
+      setQRToAdd(initialData.type);
+      setIsReadOnly(readOnly);
+    } else if (!isOpen && !initialData) {
+      setQRToAdd(null);
+    } else if (isOpen && !initialData) {
+      // keep current selection for create mode
+    }
+  }, [isOpen, initialData, readOnly]);
 
   const toggleDialog = (setOpen: boolean) => {
     if (!setOpen) {
-      setQRToAdd(null);
+      if (!initialData) {
+        setQRToAdd(null);
+      }
+      setIsReadOnly(readOnly);
     }
     onToggleDialog(setOpen);
   };
@@ -43,15 +73,24 @@ const AddQrModal = ({ onToggleDialog, isOpen }: AddQrModalProps) => {
     toggleDialog(false);
   };
 
+  const isEdit = Boolean(initialData);
+
   return (
     <Dialog modal open={isOpen} onOpenChange={toggleDialog}>
       <DialogOverlay className="border-4">
         <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Add new QR</DialogTitle>
+            <DialogTitle>
+              {/* eslint-disable-next-line no-nested-ternary */}
+              {isReadOnly ? `View QR` : isEdit ? `Edit QR` : `Add new QR`}
+            </DialogTitle>
             <DialogDescription>
-              Fill the form to create a QR. Latest items first, pinned items on
-              top
+              {/* eslint-disable-next-line no-nested-ternary */}
+              {isReadOnly
+                ? `Read-only view. Unlock to edit.`
+                : isEdit
+                  ? `Update the QR data and save`
+                  : `Fill the form to create a QR. Latest items first, pinned items on top`}
             </DialogDescription>
           </DialogHeader>
           <div className="grid grid-cols-1 gap-1.5 items-center justify-center">
@@ -61,6 +100,7 @@ const AddQrModal = ({ onToggleDialog, isOpen }: AddQrModalProps) => {
                 onValueChange={(v: QRCodeTypeEnum) => {
                   setQRToAdd(v);
                 }}
+                disabled={isEdit}
               >
                 <SelectTrigger className="w-[180px]">
                   <SelectValue placeholder="QR Type" />
@@ -82,8 +122,18 @@ const AddQrModal = ({ onToggleDialog, isOpen }: AddQrModalProps) => {
               </Select>
             </div>
           </div>
-          <QrForm type={QRToAdd} onSuccess={closeDialog} />
-          <DialogFooter className="sm:justify-end dialog-footer">
+          <QrForm
+            type={QRToAdd}
+            initialData={initialData ?? null}
+            onSuccess={closeDialog}
+            readOnly={isReadOnly}
+          />
+          <DialogFooter className="sm:justify-end dialog-footer gap-2">
+            {isReadOnly && isEdit && (
+              <Button type="button" onClick={() => setIsReadOnly(false)}>
+                Edit
+              </Button>
+            )}
             <DialogClose asChild onClick={closeDialog}>
               <Button type="button" variant="ghost">
                 Close

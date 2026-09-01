@@ -1,9 +1,6 @@
-/* eslint-disable @typescript-eslint/no-unused-vars */
-
 'use client';
 
 import {
-  BellIcon,
   DrawingPinFilledIcon as BookmarkedIcon,
   DrawingPinIcon as NotBookmarkedIcon,
   Share1Icon,
@@ -12,16 +9,9 @@ import {
 
 import {
   TrashIcon as HeroTrashIcon,
-  EyeDropperIcon,
-  PencilIcon,
   PencilSquareIcon,
-  InboxStackIcon,
   ArrowDownIcon,
   ClipboardDocumentIcon,
-  ClipboardIcon,
-  PaperClipIcon,
-  ClipboardDocumentCheckIcon,
-  ClipboardDocumentListIcon,
   EyeIcon,
   WifiIcon,
   LinkIcon,
@@ -29,7 +19,6 @@ import {
   EnvelopeIcon,
   ChatBubbleBottomCenterTextIcon,
   UserIcon,
-  UserCircleIcon,
   BookOpenIcon,
 } from '@heroicons/react/24/outline';
 
@@ -43,8 +32,7 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
-import React, { useEffect, useMemo, useState } from 'react';
-import Link from 'next/link';
+import React, { useMemo, useState } from 'react';
 import Image from 'next/image';
 import {
   TBook,
@@ -55,8 +43,10 @@ import {
   TSms,
   TText,
   TQr,
+  TWifi,
 } from '@/types/qr';
 import { QRCodeTypeEnum } from '@/constants/enums';
+import { db } from '@/db';
 
 const getQrData = (type: QRCodeTypeEnum, data: TQr[`data`]) => {
   let Icon: React.ElementType;
@@ -104,7 +94,7 @@ const getQrData = (type: QRCodeTypeEnum, data: TQr[`data`]) => {
       break;
     case QRCodeTypeEnum.wifi:
       typeText = `WiFi`;
-      const wifiData = data as TContact[`data`];
+      const wifiData = data as TWifi[`data`];
       dataTitleText = wifiData.name;
       Icon = WifiIcon;
       break;
@@ -149,8 +139,20 @@ const getQrData = (type: QRCodeTypeEnum, data: TQr[`data`]) => {
   };
 };
 
-export function QRCard({ className = `shadow sm:flex`, ...props }: TQr) {
-  const { type, title, description, data, isBookmark, ...cardProps } = props;
+type QRCardProps = TQr & {
+  onEdit?: (qr: TQr) => void;
+  onCardClick?: (qr: TQr) => void;
+};
+
+export function QRCard({
+  className = `shadow sm:flex`,
+  onEdit,
+  onCardClick,
+  ...props
+}: QRCardProps) {
+  const { id, type, title, description, data, isBookmark, ...cardProps } =
+    props;
+  const qr = props as TQr;
   const { Icon, typeText, dataTitleText } = getQrData(type, data);
   const cardTitleText = title ?? `Untitled ${typeText ?? `Item`}`;
 
@@ -165,30 +167,145 @@ export function QRCard({ className = `shadow sm:flex`, ...props }: TQr) {
   };
 
   const BookmarkIcon = useMemo(() => {
-    // Select initial icon based on bookmark status
     let IconToReturn = isBookmark ? BookmarkedIcon : NotBookmarkedIcon;
-
-    // If hovered, toggle the icon
     if (isHovered) {
       IconToReturn = isBookmark ? NotBookmarkedIcon : BookmarkedIcon;
     }
     return IconToReturn;
   }, [isHovered, isBookmark]);
 
+  const handlePinClick = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    try {
+      await db.qrs.update(id, {
+        isBookmark: !isBookmark,
+        updatedAt: new Date().toISOString(),
+      } as Partial<TQr>);
+    } catch (err) {
+      console.error(`Failed to toggle pin`, err);
+    }
+  };
+
+  const handleDelete = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    try {
+      await db.qrs.delete(id);
+    } catch (err) {
+      console.error(`Failed to delete QR`, err);
+    }
+  };
+
+  const handleCopy = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    try {
+      const res = await fetch(`/qr.png`);
+      const blob = await res.blob();
+      // Try modern image clipboard API
+      if (
+        navigator.clipboard &&
+        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+        (window as unknown as { ClipboardItem?: unknown }).ClipboardItem
+      ) {
+        const ClipboardItemCtor = (
+          window as unknown as { ClipboardItem: typeof ClipboardItem }
+        ).ClipboardItem;
+        const item = new ClipboardItemCtor({
+          [blob.type || `image/png`]: blob,
+        });
+        await navigator.clipboard.write([item]);
+      } else if (navigator.clipboard) {
+        // fallback: copy text representation
+        await navigator.clipboard.writeText(dataTitleText);
+      }
+    } catch (err) {
+      console.error(`Failed to copy image`, err);
+      // fallback to text copy
+      try {
+        await navigator.clipboard.writeText(dataTitleText);
+        // eslint-disable-next-line no-empty
+      } catch {}
+    }
+  };
+
+  const handleDownload = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    try {
+      const res = await fetch(`/qr.png`);
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement(`a`);
+      a.href = url;
+      a.download = `${cardTitleText.replace(/\s+/g, `_`)}-qr.png`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error(`Failed to download`, err);
+    }
+  };
+
+  const handleShare = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    // Share now just copies text to clipboard per updated spec
+    // Future: popup/modal with email/x/facebook options could be added here
+    try {
+      await navigator.clipboard.writeText(dataTitleText);
+    } catch (err) {
+      console.error(`Failed to share (copy)`, err);
+    }
+  };
+
+  const handleEdit = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (onEdit) {
+      onEdit(qr);
+    } else {
+      window.dispatchEvent(
+        new CustomEvent(`meroqr:openEditModal`, { detail: { qr } })
+      );
+    }
+  };
+
+  const handleCardClick = () => {
+    if (onCardClick) {
+      onCardClick(qr);
+    } else {
+      window.dispatchEvent(
+        new CustomEvent(`meroqr:openReadModal`, { detail: { qr } })
+      );
+    }
+  };
+
+  const handleCardKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === `Enter` || e.key === ` `) {
+      e.preventDefault();
+      handleCardClick();
+    }
+  };
+
   return (
     <Card
-      className={cn(`flex flex-col relative max-w-full`, className)}
+      className={cn(
+        `flex flex-col relative max-w-full cursor-pointer hover:shadow-md transition-shadow`,
+        className
+      )}
+      onClick={handleCardClick}
+      onKeyDown={handleCardKeyDown}
+      role="button"
+      tabIndex={0}
+      aria-label={`Open ${cardTitleText}`}
       {...cardProps}
     >
       <CardHeader className="max-w-full mb-auto">
-        <CardTitle className="truncate">{cardTitleText}</CardTitle>
+        <CardTitle className="truncate pr-8">{cardTitleText}</CardTitle>
         <CardDescription className="truncate">{description}</CardDescription>
       </CardHeader>
       <CardContent className="max-w-full grid gap-4">
         <div className="w-full items-center p-0 flex flex-row gap-4">
           <Icon className="flex-none mr-1 h-6 w-6" />
           <div className="flex-col space-y-1">
-            <p className="text-sm font-medium leading-none line-clamp-1">
+            <p className="text-sm font-medium leading-normal line-clamp-1">
               {dataTitleText}
             </p>
             <p className="text-sm text-muted-foreground truncate">{typeText}</p>
@@ -208,21 +325,35 @@ export function QRCard({ className = `shadow sm:flex`, ...props }: TQr) {
           <Button
             size={`icon`}
             variant={`ghost`}
-            className="xw-full xflex xitems-center hover:text-primary px-2 py-2"
+            className="hover:text-primary px-2 py-2"
+            onClick={handleDownload}
+            onMouseEnter={handleMouseEnter}
+            onMouseLeave={handleMouseLeave}
+            aria-label="Download QR"
           >
             <ArrowDownIcon className="h-8 w-8" />
           </Button>
           <Button
             size={`icon`}
             variant={`ghost`}
-            className="xw-full flex items-center hover:text-primary px-2 py-2"
+            className="flex items-center hover:text-primary px-2 py-2"
+            onClick={handleCopy}
+            onMouseEnter={handleMouseEnter}
+            onMouseLeave={handleMouseLeave}
+            aria-label="Copy QR image"
+            title="Copy QR image"
           >
             <ClipboardDocumentIcon className="h-8 w-8" />
           </Button>
           <Button
             size={`icon`}
             variant={`ghost`}
-            className="xw-full xflex xitems-center hover:text-primary px-2 py-2"
+            className="hover:text-primary px-2 py-2"
+            onClick={handleShare}
+            onMouseEnter={handleMouseEnter}
+            onMouseLeave={handleMouseLeave}
+            aria-label="Share QR (copy text)"
+            title="Copy text to clipboard"
           >
             <Share1Icon className="h-8 w-8" />
           </Button>
@@ -232,24 +363,42 @@ export function QRCard({ className = `shadow sm:flex`, ...props }: TQr) {
           <Button
             size={`icon`}
             variant={`ghost`}
-            className="xw-full xflex xitems-center hover:text-primary px-2 py-2"
+            className="hover:text-primary px-2 py-2"
+            onClick={handleEdit}
+            onMouseEnter={handleMouseEnter}
+            onMouseLeave={handleMouseLeave}
+            aria-label="Edit QR"
           >
             <PencilSquareIcon className="h-8 w-8" />
           </Button>
           <Button
             size={`icon`}
             variant={`ghost`}
-            className="xw-full xflex xitems-center hover:text-destructive px-2 py-2 hover:none"
+            className="hover:text-destructive px-2 py-2"
+            onClick={handleDelete}
+            onMouseEnter={handleMouseEnter}
+            onMouseLeave={handleMouseLeave}
+            aria-label="Delete QR"
           >
             <HeroTrashIcon className="h-8 w-8" />
           </Button>
         </div>
       </CardFooter>
       {React.createElement(BookmarkIcon, {
-        className: `absolute cursor-pointer px-2 py-2 top-4 right-4 h-9 w-9`,
+        className: `absolute cursor-pointer px-2 py-2 top-4 right-4 h-9 w-9 hover:text-primary transition-colors`,
         onMouseEnter: handleMouseEnter,
         onMouseLeave: handleMouseLeave,
-      })}
+        onClick: handlePinClick,
+        [`aria-label`]: isBookmark ? `Unpin QR` : `Pin QR`,
+        role: `button`,
+        tabIndex: 0,
+        onKeyDown: (e: React.KeyboardEvent) => {
+          if (e.key === `Enter` || e.key === ` `) {
+            e.preventDefault();
+            handlePinClick(e as unknown as React.MouseEvent);
+          }
+        },
+      } as unknown as Record<string, unknown>)}
     </Card>
   );
 }

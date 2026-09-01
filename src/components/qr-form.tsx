@@ -5,8 +5,13 @@ import { useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 
 import { NetworkTypeEnum, QRCodeTypeEnum } from '@/constants/enums';
-import { createQrFromFormValues } from '@/helpers/qr/createQr';
+import {
+  applyFormValuesToQr,
+  createQrFromFormValues,
+  qrToFormValues,
+} from '@/helpers/qr/createQr';
 import { getQrSchema, QrFormValues } from '@/lib/validations/qr';
+import { TQr } from '@/types/qr';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
@@ -31,6 +36,9 @@ import { db } from '@/db';
 interface QrFormProps {
   type: QRCodeTypeEnum | null;
   onSuccess: () => void;
+  initialData?: TQr | null;
+  submitLabel?: string;
+  readOnly?: boolean;
 }
 
 function getDefaultValues(type: QRCodeTypeEnum | null): Partial<QrFormValues> {
@@ -100,19 +108,30 @@ function getDefaultValues(type: QRCodeTypeEnum | null): Partial<QrFormValues> {
   }
 }
 
-export function QrForm({ type, onSuccess }: QrFormProps) {
+export function QrForm({
+  type,
+  onSuccess,
+  initialData,
+  submitLabel,
+  readOnly = false,
+}: QrFormProps) {
   const schema = type ? getQrSchema(type) : null;
 
   const form = useForm<QrFormValues>({
     resolver: schema ? (zodResolver(schema as never) as never) : undefined,
-    defaultValues: getDefaultValues(type) as never,
-    // re-validate on change for better UX
+    defaultValues: (initialData
+      ? qrToFormValues(initialData)
+      : getDefaultValues(type)) as never,
     mode: `onChange`,
   });
 
   useEffect(() => {
-    form.reset(getDefaultValues(type) as never);
-  }, [type, form]);
+    if (initialData) {
+      form.reset(qrToFormValues(initialData) as never);
+    } else {
+      form.reset(getDefaultValues(type) as never);
+    }
+  }, [type, initialData, form]);
 
   if (!type || !schema) {
     return (
@@ -123,9 +142,23 @@ export function QrForm({ type, onSuccess }: QrFormProps) {
   }
 
   const onSubmit = async (values: QrFormValues) => {
-    const qr = createQrFromFormValues(values);
-    await db.qrs.add(qr);
-    form.reset(getDefaultValues(type) as never);
+    if (readOnly) return;
+    if (initialData) {
+      const updated = applyFormValuesToQr(initialData, values);
+      await db.qrs.put(updated);
+    } else {
+      const qr = createQrFromFormValues(values);
+      await db.qrs.add(qr);
+    }
+    form.reset(
+      (initialData
+        ? qrToFormValues(
+            initialData.type === values.type
+              ? applyFormValuesToQr(initialData, values)
+              : (values as unknown as TQr)
+          )
+        : getDefaultValues(type)) as never
+    );
     onSuccess();
   };
 
@@ -135,6 +168,11 @@ export function QrForm({ type, onSuccess }: QrFormProps) {
         onSubmit={form.handleSubmit(onSubmit as never)}
         className="space-y-4 max-h-[45vh] overflow-y-auto pr-1"
       >
+        {readOnly && (
+          <p className="text-xs text-muted-foreground bg-muted px-2 py-1 rounded">
+            Read-only view. Unlock to edit.
+          </p>
+        )}
         {/* Common fields */}
         <FormField
           control={form.control as never}
@@ -145,6 +183,7 @@ export function QrForm({ type, onSuccess }: QrFormProps) {
               <FormControl>
                 <Input
                   placeholder="My QR title"
+                  disabled={readOnly}
                   {...field}
                   value={field.value ?? ``}
                 />
@@ -162,6 +201,7 @@ export function QrForm({ type, onSuccess }: QrFormProps) {
               <FormControl>
                 <Input
                   placeholder="Short description"
+                  disabled={readOnly}
                   {...field}
                   value={field.value ?? ``}
                 />
@@ -182,6 +222,7 @@ export function QrForm({ type, onSuccess }: QrFormProps) {
                 <FormControl>
                   <Input
                     placeholder="https://example.com"
+                    disabled={readOnly}
                     {...field}
                     value={field.value ?? ``}
                   />
@@ -202,6 +243,7 @@ export function QrForm({ type, onSuccess }: QrFormProps) {
                 <FormControl>
                   <Textarea
                     placeholder="Enter text"
+                    disabled={readOnly}
                     {...field}
                     value={field.value ?? ``}
                   />
@@ -223,6 +265,7 @@ export function QrForm({ type, onSuccess }: QrFormProps) {
                   <FormControl>
                     <Input
                       placeholder="MyWifi"
+                      disabled={readOnly}
                       {...field}
                       value={field.value ?? ``}
                     />
@@ -240,6 +283,7 @@ export function QrForm({ type, onSuccess }: QrFormProps) {
                   <Select
                     onValueChange={field.onChange}
                     defaultValue={field.value}
+                    disabled={readOnly}
                   >
                     <FormControl>
                       <SelectTrigger>
@@ -271,6 +315,7 @@ export function QrForm({ type, onSuccess }: QrFormProps) {
                       <Input
                         type="password"
                         placeholder="••••••••"
+                        disabled={readOnly}
                         {...field}
                         value={field.value ?? ``}
                       />
@@ -294,6 +339,7 @@ export function QrForm({ type, onSuccess }: QrFormProps) {
                   <FormControl>
                     <Input
                       placeholder="to@example.com"
+                      disabled={readOnly}
                       {...field}
                       value={field.value ?? ``}
                     />
@@ -311,6 +357,7 @@ export function QrForm({ type, onSuccess }: QrFormProps) {
                   <FormControl>
                     <Input
                       placeholder="cc@example.com"
+                      disabled={readOnly}
                       {...field}
                       value={field.value ?? ``}
                     />
@@ -328,6 +375,7 @@ export function QrForm({ type, onSuccess }: QrFormProps) {
                   <FormControl>
                     <Input
                       placeholder="Subject"
+                      disabled={readOnly}
                       {...field}
                       value={field.value ?? ``}
                     />
@@ -345,6 +393,7 @@ export function QrForm({ type, onSuccess }: QrFormProps) {
                   <FormControl>
                     <Textarea
                       placeholder="Email body"
+                      disabled={readOnly}
                       {...field}
                       value={field.value ?? ``}
                     />
@@ -367,6 +416,7 @@ export function QrForm({ type, onSuccess }: QrFormProps) {
                   <FormControl>
                     <Input
                       placeholder="+977 98xxxxxxxx"
+                      disabled={readOnly}
                       {...field}
                       value={field.value ?? ``}
                     />
@@ -384,6 +434,7 @@ export function QrForm({ type, onSuccess }: QrFormProps) {
                   <FormControl>
                     <Input
                       placeholder="Full name"
+                      disabled={readOnly}
                       {...field}
                       value={field.value ?? ``}
                     />
@@ -401,6 +452,7 @@ export function QrForm({ type, onSuccess }: QrFormProps) {
                   <FormControl>
                     <Input
                       placeholder="email@example.com"
+                      disabled={readOnly}
                       {...field}
                       value={field.value ?? ``}
                     />
@@ -423,6 +475,7 @@ export function QrForm({ type, onSuccess }: QrFormProps) {
                   <FormControl>
                     <Input
                       placeholder="John Doe"
+                      disabled={readOnly}
                       {...field}
                       value={field.value ?? ``}
                     />
@@ -440,6 +493,7 @@ export function QrForm({ type, onSuccess }: QrFormProps) {
                   <FormControl>
                     <Input
                       placeholder="+977..."
+                      disabled={readOnly}
                       {...field}
                       value={field.value ?? ``}
                     />
@@ -457,6 +511,7 @@ export function QrForm({ type, onSuccess }: QrFormProps) {
                   <FormControl>
                     <Input
                       placeholder="email@example.com"
+                      disabled={readOnly}
                       {...field}
                       value={field.value ?? ``}
                     />
@@ -474,6 +529,7 @@ export function QrForm({ type, onSuccess }: QrFormProps) {
                   <FormControl>
                     <Input
                       placeholder="Acme Inc."
+                      disabled={readOnly}
                       {...field}
                       value={field.value ?? ``}
                     />
@@ -491,6 +547,7 @@ export function QrForm({ type, onSuccess }: QrFormProps) {
                   <FormControl>
                     <Input
                       placeholder="CEO"
+                      disabled={readOnly}
                       {...field}
                       value={field.value ?? ``}
                     />
@@ -513,6 +570,7 @@ export function QrForm({ type, onSuccess }: QrFormProps) {
                   <FormControl>
                     <Input
                       placeholder="Phone number"
+                      disabled={readOnly}
                       {...field}
                       value={field.value ?? ``}
                     />
@@ -530,6 +588,7 @@ export function QrForm({ type, onSuccess }: QrFormProps) {
                   <FormControl>
                     <Textarea
                       placeholder="SMS text"
+                      disabled={readOnly}
                       {...field}
                       value={field.value ?? ``}
                     />
@@ -552,6 +611,7 @@ export function QrForm({ type, onSuccess }: QrFormProps) {
                   <FormControl>
                     <Input
                       placeholder="The Abominable"
+                      disabled={readOnly}
                       {...field}
                       value={field.value ?? ``}
                     />
@@ -569,6 +629,7 @@ export function QrForm({ type, onSuccess }: QrFormProps) {
                   <FormControl>
                     <Input
                       placeholder="Dan Simmons"
+                      disabled={readOnly}
                       {...field}
                       value={field.value ?? ``}
                     />
@@ -586,6 +647,7 @@ export function QrForm({ type, onSuccess }: QrFormProps) {
                   <FormControl>
                     <Input
                       placeholder="9780316198837"
+                      disabled={readOnly}
                       {...field}
                       value={field.value ?? ``}
                     />
@@ -606,6 +668,7 @@ export function QrForm({ type, onSuccess }: QrFormProps) {
                 <Checkbox
                   checked={field.value}
                   onCheckedChange={field.onChange}
+                  disabled={readOnly}
                 />
               </FormControl>
               <FormLabel className="font-normal cursor-pointer">
@@ -615,13 +678,15 @@ export function QrForm({ type, onSuccess }: QrFormProps) {
           )}
         />
 
-        <Button
-          type="submit"
-          className="w-full"
-          disabled={!form.formState.isValid && form.formState.isSubmitted}
-        >
-          Add QR
-        </Button>
+        {!readOnly && (
+          <Button
+            type="submit"
+            className="w-full"
+            disabled={!form.formState.isValid && form.formState.isSubmitted}
+          >
+            {submitLabel ?? (initialData ? `Update QR` : `Add QR`)}
+          </Button>
+        )}
       </form>
     </Form>
   );
