@@ -1,8 +1,9 @@
 'use client';
 
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
+import Image from 'next/image';
 
 import { NetworkTypeEnum, QRCodeTypeEnum } from '@/constants/enums';
 import {
@@ -12,6 +13,8 @@ import {
 } from '@/helpers/qr/createQr';
 import { getQrSchema, QrFormValues } from '@/lib/validations/qr';
 import { TQr } from '@/types/qr';
+import { qrToContent } from '@/helpers/qr/toContent';
+import { generateQrDataUrl } from '@/lib/qr/generator';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
@@ -136,6 +139,42 @@ export function QrForm({
     }
   }, [type, initialData, form]);
 
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const watched = form.watch();
+  // preview for edit/create
+  useEffect(() => {
+    if (readOnly) return;
+    const vals = form.getValues() as QrFormValues & Record<string, unknown>;
+    if (!vals.type) {
+      setPreviewUrl(null);
+      return;
+    }
+    try {
+      const tmp = createQrFromFormValues(vals as QrFormValues);
+      const content = qrToContent(tmp);
+      if (!content) {
+        setPreviewUrl(null);
+        return;
+      }
+      generateQrDataUrl(content)
+        .then(setPreviewUrl)
+        .catch(() => setPreviewUrl(null));
+    } catch {
+      setPreviewUrl(null);
+    }
+  }, [watched, readOnly, form]);
+
+  // preview for readOnly (from initialData)
+  const [readPreviewUrl, setReadPreviewUrl] = useState<string | null>(null);
+  useEffect(() => {
+    if (!readOnly || !initialData) return;
+    const content = qrToContent(initialData);
+    if (!content) return;
+    generateQrDataUrl(content)
+      .then(setReadPreviewUrl)
+      .catch(() => setReadPreviewUrl(null));
+  }, [readOnly, initialData]);
+
   if (!type || !schema) {
     return (
       <p className="text-sm text-muted-foreground py-2">
@@ -193,6 +232,18 @@ export function QrForm({
             </button>
           )}
         </p>
+        {readPreviewUrl && (
+          <div className="flex justify-center py-2">
+            <Image
+              src={readPreviewUrl}
+              alt="QR preview"
+              width={200}
+              height={200}
+              unoptimized
+              className="rounded border bg-white p-2"
+            />
+          </div>
+        )}
         <div className="divide-y rounded-md border p-3">
           {displayRow(`Title`, values.title as string)}
           {displayRow(`Description`, values.description as string)}
@@ -204,6 +255,16 @@ export function QrForm({
               ? `Yes`
               : `No`
           )}
+          {initialData &&
+            displayRow(
+              `Created`,
+              new Date(initialData.createdAt).toLocaleString()
+            )}
+          {initialData &&
+            displayRow(
+              `Updated`,
+              new Date(initialData.updatedAt).toLocaleString()
+            )}
           {type === QRCodeTypeEnum.link &&
             displayRow(`URL`, values.url as string)}
           {type === QRCodeTypeEnum.text &&
@@ -795,6 +856,20 @@ export function QrForm({
             </FormItem>
           )}
         />
+
+        {previewUrl && (
+          <div className="flex flex-col items-center gap-1 py-2 border rounded-md bg-muted/20">
+            <p className="text-xs text-muted-foreground">Preview</p>
+            <Image
+              src={previewUrl}
+              alt="QR preview"
+              width={160}
+              height={160}
+              unoptimized
+              className="rounded bg-white p-1"
+            />
+          </div>
+        )}
 
         {!readOnly && (
           <Button

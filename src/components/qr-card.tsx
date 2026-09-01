@@ -12,6 +12,7 @@ import {
   PencilSquareIcon,
   ArrowDownIcon,
   ClipboardDocumentIcon,
+  DocumentDuplicateIcon,
   EyeIcon,
   WifiIcon,
   LinkIcon,
@@ -58,6 +59,8 @@ import { getShareText, getShareUrl } from '@/helpers/qr/shareText';
 import { qrRepository } from '@/lib/storage/dexieQrRepository';
 import { qrToContent } from '@/helpers/qr/toContent';
 import { generateQrDataUrl, qrGenerator } from '@/lib/qr/generator';
+import { getDeviceId } from '@/lib/device';
+import { nanoid } from 'nanoid';
 
 const getQrData = (type: QRCodeTypeEnum, data: TQr[`data`]) => {
   let Icon: React.ElementType;
@@ -180,6 +183,7 @@ export function QRCard({
   const [isPinAnimating, setIsPinAnimating] = useState(false);
   const [qrDataUrl, setQrDataUrl] = useState<string>(`/qr.png`);
   const qrContent = qrToContent(qr);
+  const shareText = getShareText(qr);
 
   useEffect(() => {
     const fav =
@@ -295,12 +299,19 @@ export function QRCard({
     }
   };
 
-  const handleShare = (e: React.MouseEvent) => {
+  const handleShare = async (e: React.MouseEvent) => {
     e.stopPropagation();
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: cardTitleText, text: shareText });
+        return;
+      } catch (err) {
+        if ((err as Error).name === `AbortError`) return;
+        // fallback to dialog
+      }
+    }
     setIsShareOpen(true);
   };
-
-  const shareText = getShareText(qr);
 
   const handleShareCopy = async () => {
     try {
@@ -385,6 +396,28 @@ export function QRCard({
       window.dispatchEvent(
         new CustomEvent(`meroqr:openEditModal`, { detail: { qr } })
       );
+    }
+  };
+
+  const handleDuplicate = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    try {
+      const now = Date.now();
+      const deviceId = getDeviceId();
+      const dup: TQr = {
+        ...qr,
+        id: nanoid(),
+        title: qr.title ? `Copy of ${qr.title}` : `Copy of ${cardTitleText}`,
+        createdAt: now,
+        updatedAt: now,
+        createdByDeviceId: deviceId,
+        updatedByDeviceId: deviceId,
+        version: 1,
+        deletedAt: null,
+      } as TQr;
+      await qrRepository.create(dup);
+    } catch (err) {
+      console.error(`Failed to duplicate`, err);
     }
   };
 
@@ -508,6 +541,18 @@ export function QRCard({
               aria-label="Edit QR"
             >
               <PencilSquareIcon className="h-8 w-8" />
+            </Button>
+            <Button
+              size={`icon`}
+              variant={`ghost`}
+              className="hover:text-primary px-2 py-2"
+              onClick={handleDuplicate}
+              onMouseEnter={handleMouseEnter}
+              onMouseLeave={handleMouseLeave}
+              aria-label="Duplicate QR"
+              title="Duplicate"
+            >
+              <DocumentDuplicateIcon className="h-8 w-8" />
             </Button>
             <Button
               size={`icon`}

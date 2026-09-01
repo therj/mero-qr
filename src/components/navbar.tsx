@@ -8,6 +8,7 @@ import {
   HomeIcon,
   PlayIcon,
   ArrowUpTrayIcon,
+  ArrowDownTrayIcon,
   MagnifyingGlassIcon,
 } from '@heroicons/react/24/outline';
 import { PlusIcon } from '@radix-ui/react-icons';
@@ -23,6 +24,25 @@ import { Input } from './ui/input';
 
 const deleteAllItems = () => {
   qrRepository.clear();
+};
+
+const handleExport = async () => {
+  try {
+    const all = await qrRepository.list();
+    const blob = new Blob([JSON.stringify(all, null, 2)], {
+      type: `application/json`,
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement(`a`);
+    a.href = url;
+    a.download = `mero-qr-export-${new Date().toISOString().slice(0, 10)}.json`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  } catch (e) {
+    console.error(`Export failed`, e);
+  }
 };
 
 function NavBar({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
@@ -137,6 +157,23 @@ function NavBar({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
                 title="Import QR as JSON"
               >
                 <ArrowUpTrayIcon className="w-6 h-6 px-px py-px" />
+              </Button>
+            </Button>
+          )}
+          {isVault && (
+            <Button
+              size={`lg`}
+              variant={`outline`}
+              className="text-base p-2 hover:cursor-pointer"
+              asChild
+            >
+              <Button
+                variant={`link`}
+                className="flex flex-row items-center gap-2 text-primary hover:bg-primary hover:bg-opacity-10"
+                onClick={handleExport}
+                title="Export QRs as JSON"
+              >
+                <ArrowDownTrayIcon className="w-6 h-6 px-px py-px" />
               </Button>
             </Button>
           )}
