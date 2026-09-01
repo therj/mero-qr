@@ -188,6 +188,11 @@ export function QRCard({
 
   const handleDelete = async (e: React.MouseEvent) => {
     e.stopPropagation();
+    // eslint-disable-next-line no-alert
+    const confirmed = window.confirm(
+      `Delete "${cardTitleText}"? This cannot be undone.`
+    );
+    if (!confirmed) return;
     try {
       await db.qrs.delete(id);
     } catch (err) {
@@ -247,10 +252,20 @@ export function QRCard({
 
   const handleShare = async (e: React.MouseEvent) => {
     e.stopPropagation();
-    // Share now just copies text to clipboard per updated spec
-    // Future: popup/modal with email/x/facebook options could be added here
     try {
       await navigator.clipboard.writeText(dataTitleText);
+      // distinct feedback vs copy-image; future popup with email/x/facebook options
+      // For now show confirmation to distinguish from copy-image
+      const shareUrl = encodeURIComponent(dataTitleText);
+      const subject = encodeURIComponent(cardTitleText);
+      // Offer quick share options via window prompt (placeholder for future modal)
+      // eslint-disable-next-line no-alert
+      const choice = window.confirm(
+        `Text copied to clipboard!\n\nShare "${cardTitleText}" via:\nOK = Email, Cancel = just copied.\n\nFuture: X/Facebook options here.`
+      );
+      if (choice) {
+        window.open(`mailto:?subject=${subject}&body=${shareUrl}`, `_blank`);
+      }
     } catch (err) {
       console.error(`Failed to share (copy)`, err);
     }

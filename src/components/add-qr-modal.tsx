@@ -42,29 +42,36 @@ const AddQrModal = ({
   const [QRToAdd, setQRToAdd] = useState<QRCodeTypeEnum | null>(
     initialData?.type ?? null
   );
-  const [isReadOnly, setIsReadOnly] = useState(readOnly);
+  const [isEditing, setIsEditing] = useState(false);
+
+  // derived read-only view: when readOnly prop true and not yet editing
+  const isReadOnlyView = readOnly && !isEditing;
+  const isEdit = Boolean(initialData);
 
   useEffect(() => {
-    setIsReadOnly(readOnly);
-  }, [readOnly]);
-
-  useEffect(() => {
-    if (isOpen && initialData) {
-      setQRToAdd(initialData.type);
-      setIsReadOnly(readOnly);
-    } else if (!isOpen && !initialData) {
+    if (isOpen) {
+      if (initialData) {
+        setQRToAdd(initialData.type);
+      }
+      // reset editing when opening/closing or initialData changes
+      setIsEditing(false);
+    } else if (!initialData) {
       setQRToAdd(null);
-    } else if (isOpen && !initialData) {
-      // keep current selection for create mode
+      setIsEditing(false);
     }
-  }, [isOpen, initialData, readOnly]);
+  }, [isOpen, initialData]);
+
+  useEffect(() => {
+    // also reset when readOnly prop changes externally
+    if (!isOpen) setIsEditing(false);
+  }, [readOnly, isOpen]);
 
   const toggleDialog = (setOpen: boolean) => {
     if (!setOpen) {
       if (!initialData) {
         setQRToAdd(null);
       }
-      setIsReadOnly(readOnly);
+      setIsEditing(false);
     }
     onToggleDialog(setOpen);
   };
@@ -73,8 +80,6 @@ const AddQrModal = ({
     toggleDialog(false);
   };
 
-  const isEdit = Boolean(initialData);
-
   return (
     <Dialog modal open={isOpen} onOpenChange={toggleDialog}>
       <DialogOverlay className="border-4">
@@ -82,11 +87,11 @@ const AddQrModal = ({
           <DialogHeader>
             <DialogTitle>
               {/* eslint-disable-next-line no-nested-ternary */}
-              {isReadOnly ? `View QR` : isEdit ? `Edit QR` : `Add new QR`}
+              {isReadOnlyView ? `View QR` : isEdit ? `Edit QR` : `Add new QR`}
             </DialogTitle>
             <DialogDescription>
               {/* eslint-disable-next-line no-nested-ternary */}
-              {isReadOnly
+              {isReadOnlyView
                 ? `Read-only view. Unlock to edit.`
                 : isEdit
                   ? `Update the QR data and save`
@@ -126,11 +131,11 @@ const AddQrModal = ({
             type={QRToAdd}
             initialData={initialData ?? null}
             onSuccess={closeDialog}
-            readOnly={isReadOnly}
+            readOnly={isReadOnlyView}
           />
           <DialogFooter className="sm:justify-end dialog-footer gap-2">
-            {isReadOnly && isEdit && (
-              <Button type="button" onClick={() => setIsReadOnly(false)}>
+            {isReadOnlyView && isEdit && (
+              <Button type="button" onClick={() => setIsEditing(true)}>
                 Edit
               </Button>
             )}
