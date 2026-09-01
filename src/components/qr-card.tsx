@@ -32,6 +32,14 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import React, { useMemo, useState } from 'react';
 import Image from 'next/image';
 import {
@@ -157,6 +165,9 @@ export function QRCard({
   const cardTitleText = title ?? `Untitled ${typeText ?? `Item`}`;
 
   const [isHovered, setIsHovered] = useState(false);
+  const [isDeleteOpen, setIsDeleteOpen] = useState(false);
+  const [isShareOpen, setIsShareOpen] = useState(false);
+  const [shareCopied, setShareCopied] = useState(false);
 
   const handleMouseEnter = () => {
     setIsHovered(true);
@@ -186,15 +197,15 @@ export function QRCard({
     }
   };
 
-  const handleDelete = async (e: React.MouseEvent) => {
+  const handleDelete = (e: React.MouseEvent) => {
     e.stopPropagation();
-    // eslint-disable-next-line no-alert
-    const confirmed = window.confirm(
-      `Delete "${cardTitleText}"? This cannot be undone.`
-    );
-    if (!confirmed) return;
+    setIsDeleteOpen(true);
+  };
+
+  const confirmDelete = async () => {
     try {
       await db.qrs.delete(id);
+      setIsDeleteOpen(false);
     } catch (err) {
       console.error(`Failed to delete QR`, err);
     }
@@ -250,25 +261,38 @@ export function QRCard({
     }
   };
 
-  const handleShare = async (e: React.MouseEvent) => {
+  const handleShare = (e: React.MouseEvent) => {
     e.stopPropagation();
+    setIsShareOpen(true);
+  };
+
+  const handleShareCopy = async () => {
     try {
       await navigator.clipboard.writeText(dataTitleText);
-      // distinct feedback vs copy-image; future popup with email/x/facebook options
-      // For now show confirmation to distinguish from copy-image
-      const shareUrl = encodeURIComponent(dataTitleText);
-      const subject = encodeURIComponent(cardTitleText);
-      // Offer quick share options via window prompt (placeholder for future modal)
-      // eslint-disable-next-line no-alert
-      const choice = window.confirm(
-        `Text copied to clipboard!\n\nShare "${cardTitleText}" via:\nOK = Email, Cancel = just copied.\n\nFuture: X/Facebook options here.`
-      );
-      if (choice) {
-        window.open(`mailto:?subject=${subject}&body=${shareUrl}`, `_blank`);
-      }
+      setShareCopied(true);
+      setTimeout(() => setShareCopied(false), 2000);
     } catch (err) {
       console.error(`Failed to share (copy)`, err);
     }
+  };
+
+  const handleShareEmail = () => {
+    const shareUrl = encodeURIComponent(dataTitleText);
+    const subject = encodeURIComponent(cardTitleText);
+    window.open(`mailto:?subject=${subject}&body=${shareUrl}`, `_blank`);
+  };
+
+  const handleShareX = () => {
+    const text = encodeURIComponent(`${cardTitleText}: ${dataTitleText}`);
+    window.open(`https://twitter.com/intent/tweet?text=${text}`, `_blank`);
+  };
+
+  const handleShareFacebook = () => {
+    const url = encodeURIComponent(dataTitleText);
+    window.open(
+      `https://www.facebook.com/sharer/sharer.php?u=${url}`,
+      `_blank`
+    );
   };
 
   const handleEdit = (e: React.MouseEvent) => {
@@ -300,120 +324,177 @@ export function QRCard({
   };
 
   return (
-    <Card
-      className={cn(
-        `flex flex-col relative max-w-full cursor-pointer hover:shadow-md transition-shadow`,
-        className
-      )}
-      onClick={handleCardClick}
-      onKeyDown={handleCardKeyDown}
-      role="button"
-      tabIndex={0}
-      aria-label={`Open ${cardTitleText}`}
-      {...cardProps}
-    >
-      <CardHeader className="max-w-full mb-auto">
-        <CardTitle className="truncate pr-8">{cardTitleText}</CardTitle>
-        <CardDescription className="truncate">{description}</CardDescription>
-      </CardHeader>
-      <CardContent className="max-w-full grid gap-4">
-        <div className="w-full items-center p-0 flex flex-row gap-4">
-          <Icon className="flex-none mr-1 h-6 w-6" />
-          <div className="flex-col space-y-1">
-            <p className="text-sm font-medium leading-normal line-clamp-1">
-              {dataTitleText}
-            </p>
-            <p className="text-sm text-muted-foreground truncate">{typeText}</p>
+    <>
+      <Card
+        className={cn(
+          `flex flex-col relative max-w-full cursor-pointer hover:shadow-md transition-shadow`,
+          className
+        )}
+        onClick={handleCardClick}
+        onKeyDown={handleCardKeyDown}
+        role="button"
+        tabIndex={0}
+        aria-label={`Open ${cardTitleText}`}
+        {...cardProps}
+      >
+        <CardHeader className="max-w-full mb-auto">
+          <CardTitle className="truncate pr-8">{cardTitleText}</CardTitle>
+          <CardDescription className="truncate">{description}</CardDescription>
+        </CardHeader>
+        <CardContent className="max-w-full grid gap-4">
+          <div className="w-full items-center p-0 flex flex-row gap-4">
+            <Icon className="flex-none mr-1 h-6 w-6" />
+            <div className="flex-col space-y-1">
+              <p className="text-sm font-medium leading-normal line-clamp-1">
+                {dataTitleText}
+              </p>
+              <p className="text-sm text-muted-foreground truncate">
+                {typeText}
+              </p>
+            </div>
           </div>
-        </div>
-        <Image
-          src="/qr.png"
-          height={200}
-          width={200}
-          alt={`QR Code for ${cardTitleText}`}
-          className="place-self-center dark:contrast-125 dark:brightness-75 mt-auto"
-        />
-      </CardContent>
+          <Image
+            src="/qr.png"
+            height={200}
+            width={200}
+            alt={`QR Code for ${cardTitleText}`}
+            className="place-self-center dark:contrast-125 dark:brightness-75 mt-auto"
+          />
+        </CardContent>
 
-      <CardFooter className="w-full flex flex-row justify-between	bg-muted py-4 mb-0">
-        <div className="flex gap-2">
-          <Button
-            size={`icon`}
-            variant={`ghost`}
-            className="hover:text-primary px-2 py-2"
-            onClick={handleDownload}
-            onMouseEnter={handleMouseEnter}
-            onMouseLeave={handleMouseLeave}
-            aria-label="Download QR"
-          >
-            <ArrowDownIcon className="h-8 w-8" />
-          </Button>
-          <Button
-            size={`icon`}
-            variant={`ghost`}
-            className="flex items-center hover:text-primary px-2 py-2"
-            onClick={handleCopy}
-            onMouseEnter={handleMouseEnter}
-            onMouseLeave={handleMouseLeave}
-            aria-label="Copy QR image"
-            title="Copy QR image"
-          >
-            <ClipboardDocumentIcon className="h-8 w-8" />
-          </Button>
-          <Button
-            size={`icon`}
-            variant={`ghost`}
-            className="hover:text-primary px-2 py-2"
-            onClick={handleShare}
-            onMouseEnter={handleMouseEnter}
-            onMouseLeave={handleMouseLeave}
-            aria-label="Share QR (copy text)"
-            title="Copy text to clipboard"
-          >
-            <Share1Icon className="h-8 w-8" />
-          </Button>
-        </div>
+        <CardFooter className="w-full flex flex-row justify-between	bg-muted py-4 mb-0">
+          <div className="flex gap-2">
+            <Button
+              size={`icon`}
+              variant={`ghost`}
+              className="hover:text-primary px-2 py-2"
+              onClick={handleDownload}
+              onMouseEnter={handleMouseEnter}
+              onMouseLeave={handleMouseLeave}
+              aria-label="Download QR"
+            >
+              <ArrowDownIcon className="h-8 w-8" />
+            </Button>
+            <Button
+              size={`icon`}
+              variant={`ghost`}
+              className="flex items-center hover:text-primary px-2 py-2"
+              onClick={handleCopy}
+              onMouseEnter={handleMouseEnter}
+              onMouseLeave={handleMouseLeave}
+              aria-label="Copy QR image"
+              title="Copy QR image"
+            >
+              <ClipboardDocumentIcon className="h-8 w-8" />
+            </Button>
+            <Button
+              size={`icon`}
+              variant={`ghost`}
+              className="hover:text-primary px-2 py-2"
+              onClick={handleShare}
+              onMouseEnter={handleMouseEnter}
+              onMouseLeave={handleMouseLeave}
+              aria-label="Share QR (copy text)"
+              title="Copy text to clipboard"
+            >
+              <Share1Icon className="h-8 w-8" />
+            </Button>
+          </div>
 
-        <div className="flex gap-2">
-          <Button
-            size={`icon`}
-            variant={`ghost`}
-            className="hover:text-primary px-2 py-2"
-            onClick={handleEdit}
-            onMouseEnter={handleMouseEnter}
-            onMouseLeave={handleMouseLeave}
-            aria-label="Edit QR"
-          >
-            <PencilSquareIcon className="h-8 w-8" />
-          </Button>
-          <Button
-            size={`icon`}
-            variant={`ghost`}
-            className="hover:text-destructive px-2 py-2"
-            onClick={handleDelete}
-            onMouseEnter={handleMouseEnter}
-            onMouseLeave={handleMouseLeave}
-            aria-label="Delete QR"
-          >
-            <HeroTrashIcon className="h-8 w-8" />
-          </Button>
-        </div>
-      </CardFooter>
-      {React.createElement(BookmarkIcon, {
-        className: `absolute cursor-pointer px-2 py-2 top-4 right-4 h-9 w-9 hover:text-primary transition-colors`,
-        onMouseEnter: handleMouseEnter,
-        onMouseLeave: handleMouseLeave,
-        onClick: handlePinClick,
-        [`aria-label`]: isBookmark ? `Unpin QR` : `Pin QR`,
-        role: `button`,
-        tabIndex: 0,
-        onKeyDown: (e: React.KeyboardEvent) => {
-          if (e.key === `Enter` || e.key === ` `) {
-            e.preventDefault();
-            handlePinClick(e as unknown as React.MouseEvent);
-          }
-        },
-      } as unknown as Record<string, unknown>)}
-    </Card>
+          <div className="flex gap-2">
+            <Button
+              size={`icon`}
+              variant={`ghost`}
+              className="hover:text-primary px-2 py-2"
+              onClick={handleEdit}
+              onMouseEnter={handleMouseEnter}
+              onMouseLeave={handleMouseLeave}
+              aria-label="Edit QR"
+            >
+              <PencilSquareIcon className="h-8 w-8" />
+            </Button>
+            <Button
+              size={`icon`}
+              variant={`ghost`}
+              className="hover:text-destructive px-2 py-2"
+              onClick={handleDelete}
+              onMouseEnter={handleMouseEnter}
+              onMouseLeave={handleMouseLeave}
+              aria-label="Delete QR"
+            >
+              <HeroTrashIcon className="h-8 w-8" />
+            </Button>
+          </div>
+        </CardFooter>
+        {React.createElement(BookmarkIcon, {
+          className: `absolute cursor-pointer px-2 py-2 top-4 right-4 h-9 w-9 hover:text-primary transition-colors`,
+          onMouseEnter: handleMouseEnter,
+          onMouseLeave: handleMouseLeave,
+          onClick: handlePinClick,
+          [`aria-label`]: isBookmark ? `Unpin QR` : `Pin QR`,
+          role: `button`,
+          tabIndex: 0,
+          onKeyDown: (e: React.KeyboardEvent) => {
+            if (e.key === `Enter` || e.key === ` `) {
+              e.preventDefault();
+              handlePinClick(e as unknown as React.MouseEvent);
+            }
+          },
+        } as unknown as Record<string, unknown>)}
+      </Card>
+
+      <Dialog open={isDeleteOpen} onOpenChange={setIsDeleteOpen}>
+        <DialogContent
+          className="sm:max-w-md"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <DialogHeader>
+            <DialogTitle>Delete QR?</DialogTitle>
+            <DialogDescription>
+              Delete &quot;{cardTitleText}&quot;? This cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="sm:justify-end gap-2">
+            <Button variant="ghost" onClick={() => setIsDeleteOpen(false)}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={confirmDelete}>
+              Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isShareOpen} onOpenChange={setIsShareOpen}>
+        <DialogContent
+          className="sm:max-w-md"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <DialogHeader>
+            <DialogTitle>Share &quot;{cardTitleText}&quot;</DialogTitle>
+            <DialogDescription>Choose how to share this QR.</DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-2 py-2">
+            <Button variant="outline" onClick={handleShareCopy}>
+              {shareCopied ? `Copied!` : `Copy text`}
+            </Button>
+            <Button variant="outline" onClick={handleShareEmail}>
+              Share via Email
+            </Button>
+            <Button variant="outline" onClick={handleShareX}>
+              Share on X
+            </Button>
+            <Button variant="outline" onClick={handleShareFacebook}>
+              Share on Facebook
+            </Button>
+          </div>
+          <DialogFooter className="sm:justify-end">
+            <Button variant="ghost" onClick={() => setIsShareOpen(false)}>
+              Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
