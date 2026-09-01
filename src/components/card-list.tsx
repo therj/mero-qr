@@ -1,12 +1,13 @@
 'use client';
 
 import { useLiveQuery } from 'dexie-react-hooks';
-import { db } from '@/db';
 
 import { cn } from '@/lib/utils';
 import qrCodeSeedData from '@/constants/qr/seedData';
 import { useEffect, useState } from 'react';
 import { TQr } from '@/types/qr';
+import { qrRepository } from '@/lib/storage/dexieQrRepository';
+import { useSearch } from '@/providers/search-provider';
 import { QRCard } from './qr-card';
 import ExtraCards from './extra-cards.temp';
 import { QRCardSeed, QRCardSkeleton } from './skeleton-qr-card';
@@ -22,20 +23,19 @@ const CardList: React.FC<cardListProps> = ({ className }) => {
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [readQr, setReadQr] = useState<TQr | null>(null);
   const [isReadOpen, setIsReadOpen] = useState(false);
+  const { query } = useSearch();
 
   const idbQrs = useLiveQuery(async () => {
     try {
-      const qrs = await db.qrs
-        .orderBy(`updatedAt`)
-        .reverse()
-        .sortBy(`isBookmark`);
-
-      return qrs;
+      if (query.trim()) {
+        return qrRepository.search(query);
+      }
+      return qrRepository.list();
     } catch (error) {
       console.error(`🚀 Unable to fetch db.qrs in card-list`, error);
       return [];
     }
-  }, []);
+  }, [query]);
 
   useEffect(() => {
     if (idbQrs) {
@@ -97,9 +97,9 @@ const CardList: React.FC<cardListProps> = ({ className }) => {
 
   const seed = async () => {
     try {
-      await db.qrs.bulkAdd(qrCodeSeedData);
+      await qrRepository.bulkPut(qrCodeSeedData);
     } catch (error) {
-      console.error(`🚀 Seeding failed, db.qrs.bulkAdd:`, error);
+      console.error(`🚀 Seeding failed, bulkPut:`, error);
     }
   };
 

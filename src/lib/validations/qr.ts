@@ -6,6 +6,8 @@ export const commonFieldsSchema = z.object({
   title: z.string().optional(),
   description: z.string().optional(),
   isBookmark: z.boolean().optional().default(false),
+  favorite: z.boolean().optional(),
+  tags: z.array(z.string()).optional().default([]),
 });
 
 export const linkSchema = commonFieldsSchema.extend({

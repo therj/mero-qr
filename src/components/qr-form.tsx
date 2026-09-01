@@ -31,7 +31,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { db } from '@/db';
+import { qrRepository } from '@/lib/storage/dexieQrRepository';
 
 interface QrFormProps {
   type: QRCodeTypeEnum | null;
@@ -147,10 +147,10 @@ export function QrForm({
     if (readOnly) return;
     if (initialData) {
       const updated = applyFormValuesToQr(initialData, values);
-      await db.qrs.put(updated);
+      await qrRepository.update(updated);
     } else {
       const qr = createQrFromFormValues(values);
-      await db.qrs.add(qr);
+      await qrRepository.create(qr);
     }
     form.reset(
       (initialData

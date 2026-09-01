@@ -7,6 +7,7 @@ import { cn } from '@/lib/utils';
 import { info as appInfo } from '@/constants/app';
 import { AppVersion } from '@/components/AppVersion';
 import { NavBar } from '@/components/navbar';
+import { SearchProvider } from '@/providers/search-provider';
 
 const fontSans = FontSans({
   /* eslint-disable quotes */
@@ -63,9 +64,11 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
-          <NavBar />
-          {children}
-          <AppVersion />
+          <SearchProvider>
+            <NavBar />
+            {children}
+            <AppVersion />
+          </SearchProvider>
         </ThemeProvider>
       </body>
     </html>
