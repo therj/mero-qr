@@ -92,7 +92,7 @@ const AddQrModal = ({
             <DialogDescription>
               {/* eslint-disable-next-line no-nested-ternary */}
               {isReadOnlyView
-                ? `Read-only view. Unlock to edit.`
+                ? `Read-only view. Use the card's edit button to modify.`
                 : isEdit
                   ? `Update the QR data and save`
                   : `Fill the form to create a QR. Latest items first, pinned items on top`}
@@ -134,11 +134,6 @@ const AddQrModal = ({
             readOnly={isReadOnlyView}
           />
           <DialogFooter className="sm:justify-end dialog-footer gap-2">
-            {isReadOnlyView && isEdit && (
-              <Button type="button" onClick={() => setIsEditing(true)}>
-                Edit
-              </Button>
-            )}
             <DialogClose asChild onClick={closeDialog}>
               <Button type="button" variant="ghost">
                 Close

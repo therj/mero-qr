@@ -162,17 +162,87 @@ export function QrForm({
     onSuccess();
   };
 
+  if (readOnly) {
+    const values = (
+      initialData ? qrToFormValues(initialData) : form.getValues()
+    ) as QrFormValues & Record<string, unknown>;
+    const displayRow = (label: string, value?: string) => (
+      <div className="grid grid-cols-3 gap-2 py-1 text-sm">
+        <span className="text-muted-foreground">{label}</span>
+        <span className="col-span-2 font-medium break-words">
+          {value && String(value).trim() ? String(value) : `—`}
+        </span>
+      </div>
+    );
+    return (
+      <div className="space-y-2 max-h-[45vh] overflow-y-auto pr-1">
+        <p className="text-xs text-muted-foreground bg-muted px-2 py-1 rounded">
+          Read-only view. Use the card&apos;s edit button to modify.
+        </p>
+        <div className="divide-y rounded-md border p-3">
+          {displayRow(`Title`, values.title as string)}
+          {displayRow(`Description`, values.description as string)}
+          {displayRow(`Pinned`, values.isBookmark ? `Yes` : `No`)}
+          {type === QRCodeTypeEnum.link &&
+            displayRow(`URL`, values.url as string)}
+          {type === QRCodeTypeEnum.text &&
+            displayRow(`Text`, values.text as string)}
+          {type === QRCodeTypeEnum.wifi && (
+            <>
+              {displayRow(`Network`, values.name as string)}
+              {displayRow(`Security`, values.networkType as string)}
+              {(values.networkType as string) !== NetworkTypeEnum.open &&
+                displayRow(`Password`, `••••••••`)}
+            </>
+          )}
+          {type === QRCodeTypeEnum.email && (
+            <>
+              {displayRow(`To`, values.to as string)}
+              {displayRow(`CC`, values.cc as string)}
+              {displayRow(`Subject`, values.subject as string)}
+              {displayRow(`Body`, values.body as string)}
+            </>
+          )}
+          {type === QRCodeTypeEnum.phone && (
+            <>
+              {displayRow(`Phone`, values.phoneNumber as string)}
+              {displayRow(`Name`, values.name as string)}
+              {displayRow(`Email`, values.email as string)}
+            </>
+          )}
+          {type === QRCodeTypeEnum.contact && (
+            <>
+              {displayRow(`Name`, values.name as string)}
+              {displayRow(`Phone`, values.phoneNumber as string)}
+              {displayRow(`Email`, values.email as string)}
+              {displayRow(`Company`, values.company as string)}
+              {displayRow(`Job Title`, values.jobTitle as string)}
+            </>
+          )}
+          {type === QRCodeTypeEnum.sms && (
+            <>
+              {displayRow(`To`, values.to as string)}
+              {displayRow(`Message`, values.text as string)}
+            </>
+          )}
+          {type === QRCodeTypeEnum.book && (
+            <>
+              {displayRow(`Book Title`, values.bookTitle as string)}
+              {displayRow(`Author`, values.author as string)}
+              {displayRow(`ISBN-13`, values.isbn13 as string)}
+            </>
+          )}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <Form {...form}>
       <form
         onSubmit={form.handleSubmit(onSubmit as never)}
         className="space-y-4 max-h-[45vh] overflow-y-auto pr-1"
       >
-        {readOnly && (
-          <p className="text-xs text-muted-foreground bg-muted px-2 py-1 rounded">
-            Read-only view. Unlock to edit.
-          </p>
-        )}
         {/* Common fields */}
         <FormField
           control={form.control as never}
