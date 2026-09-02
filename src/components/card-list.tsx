@@ -20,7 +20,7 @@ import { Label } from '@/components/ui/label';
 import { QRCodeTypeEnum } from '@/constants/enums';
 import { QRCard } from './qr-card';
 import ExtraCards from './extra-cards.temp';
-import { QRCardSeed, QRCardSkeleton } from './skeleton-qr-card';
+import { QRCardSkeleton } from './skeleton-qr-card';
 import AddQrModal from './add-qr-modal';
 
 interface cardListProps extends React.HTMLAttributes<HTMLDivElement> {
@@ -195,14 +195,56 @@ const CardList: React.FC<cardListProps> = ({ className }) => {
         </div>
       </div>
       <div className="grid grid-cols-1 lg:grid-cols-3 md:grid-cols-2 sm:grid-cols-1 gap-8">
-        {/* No data, seed me please */}
-        {!loading && !filteredQrs?.length && !query && (
-          <QRCardSeed
-            seed={seed}
-            disabled={loading}
-            qrCodeDataLength={qrCodeSeedData.length}
-          />
-        )}
+        {/* Empty vault - spec §40 - Create/Import/Scan main, Seed small link */}
+        {!loading &&
+          !filteredQrs?.length &&
+          !query &&
+          filterType === `all` &&
+          !showFavoriteOnly && (
+            <div className="col-span-full flex flex-col items-center justify-center py-12 gap-4 border rounded-lg bg-muted/20">
+              <p className="text-lg font-medium">Your QR vault is empty.</p>
+              <p className="text-sm text-muted-foreground">
+                Create a QR code, import, or scan one to get started.
+              </p>
+              <div className="flex flex-wrap gap-2 justify-center">
+                <button
+                  type="button"
+                  onClick={() =>
+                    window.dispatchEvent(new CustomEvent(`meroqr:openAddModal`))
+                  }
+                  className="inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+                >
+                  Create QR
+                </button>
+                <button
+                  type="button"
+                  onClick={() =>
+                    window.dispatchEvent(new CustomEvent(`meroqr:openImport`))
+                  }
+                  className="inline-flex items-center justify-center rounded-md border bg-background px-4 py-2 text-sm font-medium hover:bg-accent"
+                >
+                  Import
+                </button>
+                <button
+                  type="button"
+                  onClick={() =>
+                    window.dispatchEvent(new CustomEvent(`meroqr:openScan`))
+                  }
+                  className="inline-flex items-center justify-center rounded-md border bg-background px-4 py-2 text-sm font-medium hover:bg-accent"
+                >
+                  Scan QR
+                </button>
+              </div>
+              <button
+                type="button"
+                onClick={seed}
+                disabled={loading}
+                className="text-xs text-muted-foreground underline hover:text-foreground mt-2"
+              >
+                looking around? Seed some data...
+              </button>
+            </div>
+          )}
         {!loading &&
           filteredQrs?.length === 0 &&
           (query || filterType !== `all` || showFavoriteOnly) && (

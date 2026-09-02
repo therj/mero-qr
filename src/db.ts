@@ -2,9 +2,12 @@
 
 import Dexie, { Table } from 'dexie';
 import { TQr } from '@/types/qr';
+import { QRStyle } from '@/types/style';
 
 export class MySubClassedDexie extends Dexie {
   qrs!: Table<TQr>;
+
+  styles!: Table<QRStyle>;
 
   constructor() {
     super(`mero_qr_idb`, { autoOpen: true });
@@ -19,6 +22,9 @@ export class MySubClassedDexie extends Dexie {
       .upgrade(async (tx) => {
         await tx.table(`qrs`).clear();
       });
+    this.version(3).stores({
+      styles: `id, name, isDefault, *createdAt, *updatedAt`,
+    });
   }
 }
 
