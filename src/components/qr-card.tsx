@@ -164,7 +164,26 @@ export function QRCard({
   onCardClick,
   ...props
 }: QRCardProps) {
-  const { id, type, title, description, data, ...cardProps } = props;
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const {
+    id,
+    type,
+    title,
+    description,
+    data,
+    isBookmark: _isBookmark,
+    favorite: _favorite,
+    tags: _tags,
+    createdAt: _createdAt,
+    updatedAt: _updatedAt,
+    createdByDeviceId: _createdByDeviceId,
+    updatedByDeviceId: _updatedByDeviceId,
+    version: _version,
+    deletedAt: _deletedAt,
+    metadata: _metadata,
+    content: _content,
+    ...cardProps
+  } = props as TQr & Record<string, unknown>;
   const qr = props as TQr;
   const { Icon, typeText, dataTitleText } = getQrData(type, data);
   const cardTitleText = title ?? `Untitled ${typeText ?? `Item`}`;

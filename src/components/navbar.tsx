@@ -1,5 +1,6 @@
 'use client';
 
+import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
@@ -10,17 +11,26 @@ import {
   ArrowUpTrayIcon,
   ArrowDownTrayIcon,
   MagnifyingGlassIcon,
+  QrCodeIcon,
+  Cog6ToothIcon,
 } from '@heroicons/react/24/outline';
+import type { TQr } from '@/types/qr';
 import { PlusIcon } from '@radix-ui/react-icons';
 import { useEffect, useState } from 'react';
 import { qrRepository } from '@/lib/storage/dexieQrRepository';
 import { useSearch } from '@/providers/search-provider';
 
+import { parseScannedToQr } from '@/helpers/qr/parseScanned';
 import { Button } from './ui/button';
 import { ThemeToggle } from './theme-provider';
 import AddQrModal from './add-qr-modal';
 import { ImportQrDialog } from './import-qr-dialog';
 import { Input } from './ui/input';
+
+const ScanQrDialog = dynamic(
+  () => import(`./scan-qr-dialog`).then((m) => m.ScanQrDialog),
+  { ssr: false }
+);
 
 const deleteAllItems = () => {
   qrRepository.clear();
@@ -53,16 +63,40 @@ function NavBar({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
 
   const [isOpen, setIsOpen] = useState(false);
   const [isImportOpen, setIsImportOpen] = useState(false);
+  const [isScanOpen, setIsScanOpen] = useState(false);
+  const [addInitialData, setAddInitialData] = useState<TQr | null>(null);
   const { query, setQuery } = useSearch();
 
   const toggleDialog = (setOpen: boolean) => {
     setIsOpen(setOpen);
+    if (!setOpen) setAddInitialData(null);
+  };
+
+  const handleScannedEdit = (content: string) => {
+    const parsed = parseScannedToQr(content);
+    setAddInitialData(parsed as unknown as TQr);
+    setIsOpen(true);
   };
 
   useEffect(() => {
-    const handler = () => setIsOpen(true);
+    const handler = () => {
+      setAddInitialData(null);
+      setIsOpen(true);
+    };
     window.addEventListener(`meroqr:openAddModal`, handler);
     return () => window.removeEventListener(`meroqr:openAddModal`, handler);
+  }, []);
+
+  useEffect(() => {
+    const handler = () => setIsScanOpen(true);
+    window.addEventListener(`meroqr:openScan`, handler);
+    return () => window.removeEventListener(`meroqr:openScan`, handler);
+  }, []);
+
+  useEffect(() => {
+    const handler = () => setIsImportOpen(true);
+    window.addEventListener(`meroqr:openImport`, handler);
+    return () => window.removeEventListener(`meroqr:openImport`, handler);
   }, []);
 
   return (
@@ -136,10 +170,30 @@ function NavBar({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
               <Button
                 variant={`link`}
                 className="flex flex-row items-center gap-2 text-primary hover:bg-primary hover:bg-opacity-10"
-                onClick={() => toggleDialog(true)}
+                onClick={() => {
+                  setAddInitialData(null);
+                  toggleDialog(true);
+                }}
                 title="Add a QR"
               >
                 <PlusIcon className="w-6 h-6 px-px py-px" />
+              </Button>
+            </Button>
+          )}
+          {isVault && (
+            <Button
+              size={`lg`}
+              variant={`outline`}
+              className="text-base p-2 hover:cursor-pointer"
+              asChild
+            >
+              <Button
+                variant={`link`}
+                className="flex flex-row items-center gap-2 text-primary hover:bg-primary hover:bg-opacity-10"
+                onClick={() => setIsScanOpen(true)}
+                title="Scan QR"
+              >
+                <QrCodeIcon className="w-6 h-6 px-px py-px" />
               </Button>
             </Button>
           )}
@@ -158,6 +212,22 @@ function NavBar({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
               >
                 <ArrowUpTrayIcon className="w-6 h-6 px-px py-px" />
               </Button>
+            </Button>
+          )}
+          {isVault && (
+            <Button
+              size={`lg`}
+              variant={`outline`}
+              className="text-base p-2 hover:cursor-pointer"
+              asChild
+            >
+              <Link
+                href="/preferences"
+                className="flex flex-row items-center gap-2 text-primary hover:bg-primary hover:bg-opacity-10 px-3 py-2"
+                title="Preferences"
+              >
+                <Cog6ToothIcon className="w-6 h-6 px-px py-px" />
+              </Link>
             </Button>
           )}
           {isVault && (
@@ -209,8 +279,17 @@ function NavBar({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
           </Button>
         </div>
       </div>
-      <AddQrModal onToggleDialog={toggleDialog} isOpen={isOpen} />
+      <AddQrModal
+        onToggleDialog={toggleDialog}
+        isOpen={isOpen}
+        initialData={addInitialData}
+      />
       <ImportQrDialog isOpen={isImportOpen} onToggle={setIsImportOpen} />
+      <ScanQrDialog
+        isOpen={isScanOpen}
+        onToggle={setIsScanOpen}
+        onEditScanned={handleScannedEdit}
+      />
     </nav>
   );
 }

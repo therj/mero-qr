@@ -34,8 +34,18 @@ export const defaultQrOptions: Partial<QrOptions> = {
 class QrCodeStylingGenerator implements QRGenerator {
   // eslint-disable-next-line class-methods-use-this
   async generate(content: string, options?: Partial<QrOptions>): Promise<Blob> {
+    let base = defaultQrOptions;
+    try {
+      const { styleRepository } = await import(
+        `@/lib/storage/dexieStyleRepository`
+      );
+      const def = await styleRepository.getDefault();
+      if (def?.options) base = { ...defaultQrOptions, ...def.options };
+    } catch {
+      // ignore style load error, use default
+    }
     const qr = new QRCodeStyling({
-      ...defaultQrOptions,
+      ...base,
       ...options,
       data: content,
     });
